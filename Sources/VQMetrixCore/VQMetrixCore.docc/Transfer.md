@@ -83,7 +83,7 @@ status polling can use `GET /api/v1/jobs/<jobId>`; it is not required by the cur
 A receiver advertises `_vqmetrix._tcp` on the local network, using its listening port.
 TXT records are `protocol=1`, `scheme=http` or `scheme=https`, and `host=MacName.local`.
 Do not publish tokens or credentials in TXT records. The Android NSD browser filters
-incompatible advertisements and fills the selected URL; it never starts an upload
+incompatible advertisements and fills the selected URL. HTTP uses the address resolved by NSD so it does not depend on system .local DNS lookup; HTTPS keeps the hostname for certificate verification. The browser it never starts an upload
 merely because a receiver appeared. Discovery does not establish receiver identity.
 
 HTTP accepts .local names and local IP literals only; resolved addresses must also be

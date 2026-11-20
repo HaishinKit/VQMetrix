@@ -49,6 +49,7 @@ class ReferenceTest {
     fun discoveryRequiresCompatibleProtocolAndLocalHttpHost() {
         val txt = mapOf("protocol" to "1", "scheme" to "http", "host" to "studio.local")
         assertEquals("http://studio.local:8787", ReceiverDiscovery.endpoint("Studio", 8787, txt)?.baseUrl)
+        assertEquals("http://192.168.1.2:8787", ReceiverDiscovery.endpoint("Studio", 8787, txt, "192.168.1.2")?.baseUrl)
         assertNull(ReceiverDiscovery.endpoint("Studio", 8787, txt + ("protocol" to "2")))
         assertNull(ReceiverDiscovery.endpoint("Studio", 8787, txt + ("host" to "example.com")))
         assertNull(ReceiverDiscovery.endpoint("Studio", 8787, txt + ("host" to "user@studio.local")))

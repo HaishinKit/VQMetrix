@@ -56,7 +56,7 @@ class ReceiverDiscovery(context: Context) {
                             if (session != generation) return@post
                             if (info.serviceName in present) {
                                 val attributes = info.attributes.mapValues { it.value.toString(Charsets.UTF_8) }
-                                endpoint(info.serviceName, info.port, attributes)?.let { receivers[info.serviceName] = it }
+                                endpoint(info.serviceName, info.port, attributes, info.host?.hostAddress)?.let { receivers[info.serviceName] = it }
                                 notifyChanged()
                             }
                             resolving = false
@@ -132,6 +132,7 @@ class ReceiverDiscovery(context: Context) {
             name: String,
             port: Int,
             attributes: Map<String, String>,
+            resolvedAddress: String? = null,
         ): ReceiverEndpoint? {
             if (attributes["protocol"] != "1" || port !in 1..65535) return null
             val scheme = attributes["scheme"] ?: return null
@@ -139,7 +140,7 @@ class ReceiverDiscovery(context: Context) {
             val host = attributes["host"]?.trimEnd('.') ?: return null
             if (host.length > 253 || !host.matches(Regex("[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?"))) return null
             return runCatching {
-                val base = URI(scheme, null, host, port, null, null, null).toString()
+                val base = URI(scheme, null, if (scheme == "http" && resolvedAddress != null) resolvedAddress else host, port, null, null, null).toString()
                 BatchUploader.endpoint(base)
                 ReceiverEndpoint(name, base)
             }.getOrNull()
