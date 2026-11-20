@@ -1,6 +1,7 @@
 # 📊 [VQMetrix](https://haishinkit.github.io/VQMetrix/)
 
 [![Build](https://github.com/HaishinKit/VQMetrix/actions/workflows/build.yml/badge.svg)](https://github.com/HaishinKit/VQMetrix/actions/workflows/build.yml)
+[![JitPack](https://jitpack.io/v/HaishinKit/VQMetrix.svg)](https://jitpack.io/#HaishinKit/VQMetrix)
 [![Android](https://img.shields.io/badge/Android-API%2026%2B-3ddc84)](Android/README.md)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE.md)
 
