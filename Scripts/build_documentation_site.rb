@@ -12,5 +12,5 @@ File.write(File.join(output, 'index.html'), <<~HTML)
   <h1>VQMetrix</h1><p>Video quality development tools for HaishinKit. Documentation for #{version}.</p>
   <p><a href="swift/documentation/vqmetrixcore/understandingvmaf/">Understanding VMAF scores</a> · <a href="swift/documentation/vqmetrixcore/understandingvmaf-japanese/">VMAFとスコアの読み方</a> · <a href="swift/documentation/vqmetrixcore/performancemetrics/">Device performance</a></p><ul><li><a href="swift/documentation/vqmetrixcore/">macOS guide and Swift reference</a></li><li><a href="android/index.html">Android transfer guide and Kotlin reference</a></li></ul>
   <p><a href="https://github.com/HaishinKit/VQMetrix/releases">Download development apps</a> · <a href="https://github.com/HaishinKit/VQMetrix">Source and transfer specification</a></p>
-  <p><small>Built on <a href="https://haishinkit.com">HaishinKit</a>. Android creates reference/encoded material; macOS evaluates quality. The network receiver remains a separate integration.</small></p></html>
+  <p><small>Built on <a href="https://haishinkit.com">HaishinKit</a>. Android creates reference/encoded material; macOS evaluates quality. Transfer samples to the macOS app over your local network.</small></p></html>
 HTML
