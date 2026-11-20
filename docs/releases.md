@@ -9,7 +9,7 @@ only a tag convention; on JitPack it also becomes part of the requested version.
 The tag workflow tests and packages:
 
 - The macOS app, with bundled libvmaf, model, localization and license notices. The CLI is no longer built or bundled.
-- The HaishinKit.kt Example development APK with camera/projection sample capture.
+- The HaishinKit.kt Example is compiled for integration verification; its APK distribution belongs to HaishinKit.kt and is not attached here.
 - The standalone Android transfer AAR, sources and Maven POM.
 - Swift DocC and Kotlin Dokka, combined into `api-documentation.tar.gz`.
 - SHA256SUMS.txt for the release assets.

@@ -87,9 +87,9 @@ is experimental; capture availability depends on the device and environment.
 
 ## 📦 Development builds
 
-The `1.0.0` tag attaches a macOS ZIP, HaishinKit Example debug APK, API documentation, and
+The `1.0.0` tag attaches a macOS ZIP, Android transfer library, API documentation, and
 checksums to [GitHub Release](https://github.com/HaishinKit/VQMetrix/releases). macOS builds
-are ad hoc signed and not notarized. The Android APK uses development signing.
+are ad hoc signed and not notarized. Android Example APK distribution is managed by HaishinKit.kt.
 
 ## ⚖️ Licenses
 

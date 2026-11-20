@@ -73,7 +73,7 @@ jobs:
             echo '::error::Checkout failed before failure reporting was available.'
           fi
   android:
-    name: Android app and Kotlin reference
+    name: Android library and Kotlin reference
     runs-on: ubuntu-latest
     timeout-minutes: 40
     defaults:
@@ -115,7 +115,6 @@ jobs:
           ./Android/gradlew -p Android :transfer:testDebugUnitTest :transfer:lintDebug :transfer:dokkaGenerate :transfer:publishReleasePublicationToVerificationRepository \
             -PpublishVersion="$APP_VERSION"
           ../HaishinKit.kt/gradlew -p ../HaishinKit.kt :app:assembleDebug :vqmetrix-example:testDebugUnitTest -PappVersionName="$APP_VERSION" -PvqmetrixTransferDir="$PWD/Android/transfer"
-          cp ../HaishinKit.kt/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/HaishinKit-Example-debug.apk"
           cp "Android/transfer/build/outputs/aar/transfer-release.aar" "$RUNNER_TEMP/VQMetrix-transfer.aar"
           cp "Android/build/maven-repository/com/github/HaishinKit/VQMetrix/$APP_VERSION/VQMetrix-$APP_VERSION-sources.jar" "$RUNNER_TEMP/VQMetrix-transfer-sources.jar"
           cp "Android/transfer/build/publications/release/pom-default.xml" "$RUNNER_TEMP/VQMetrix-transfer.pom"
@@ -126,7 +125,6 @@ jobs:
         with:
           name: VQMetrix-Android
           path: |
-            ${{ runner.temp }}/HaishinKit-Example-debug.apk
             ${{ runner.temp }}/VQMetrix-transfer.*
             ${{ runner.temp }}/VQMetrix-transfer-sources.jar
             ${{ runner.temp }}/android-reference.tar.gz
