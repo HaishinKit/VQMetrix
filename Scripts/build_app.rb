@@ -48,6 +48,7 @@ FileUtils.cp(cli, File.join(helpers, 'vqmetrix'))
 resource_bundle = File.join(bin, 'VQMetrix_VQMetrixCore.bundle')
 abort 'Missing localization resources' unless File.directory?(resource_bundle)
 FileUtils.cp_r(resource_bundle, resources)
+Dir[File.join(bin, 'ZIPFoundation*.bundle/PrivacyInfo.xcprivacy')].each { |notice| FileUtils.cp(notice, resources) }
 { 'en' => 'VQMetrix uses the camera only while measuring video quality. No audio is captured.',
   'ja' => '映像品質の計測中にカメラを使用します。音声は取得しません。' }.each do |language, message|
   folder = File.join(resources, language + '.lproj')
@@ -63,7 +64,8 @@ capture('install_name_tool', '-change', vmaf, "@executable_path/../Helpers/lib/#
   'VQMetrix.txt' => File.join(ROOT, 'LICENSE.md'),
   'HaishinKit.txt' => File.expand_path('../HaishinKit.swift/LICENSE.md', ROOT),
   'Logboard.txt' => File.join(ROOT, '.build/checkouts/Logboard/LICENSE.md'),
-  'libvmaf.txt' => vmaf_license
+  'libvmaf.txt' => vmaf_license,
+  'ZIPFoundation.txt' => File.join(ROOT, '.build/checkouts/ZIPFoundation/LICENSE')
 }.each { |name, source| FileUtils.cp(source, File.join(resources, 'Licenses', name)) }
 iconset = File.join(ROOT, '.build/AppIcon.iconset')
 FileUtils.mkdir_p(iconset)
@@ -98,9 +100,11 @@ File.write(File.join(contents, 'Info.plist'), <<~PLIST)
   <key>CFBundleLocalizations</key><array><string>en</string><string>ja</string></array>
   <key>NSCameraUsageDescription</key><string>VQMetrix uses the camera only while measuring video quality. No audio is captured.</string>
   <key>NSCameraUseContinuityCameraDeviceType</key><true/>
+  <key>NSLocalNetworkUsageDescription</key><string>Receive evaluation samples from other devices on your local network.</string>
+  <key>NSBonjourServices</key><array><string>_vqmetrix._tcp</string></array>
   </dict></plist>
 PLIST
-[File.join(resources, 'VQMetrix_VQMetrixCore.bundle'), library, File.join(helpers, 'vqmetrix'), File.join(contents, 'MacOS/VQMetrix'), app].each do |path|
+(Dir[File.join(resources, '*.bundle')] + [library, File.join(helpers, 'vqmetrix'), File.join(contents, 'MacOS/VQMetrix'), app]).each do |path|
   capture('codesign', '--force', '--sign', '-', path)
 end
 capture('codesign', '--verify', '--deep', '--strict', app)

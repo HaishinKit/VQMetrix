@@ -8,7 +8,23 @@ Video quality development tools built on HaishinKit.
 
 - **macOS:** compare reference and decoded video, change H.264/HEVC and bitrate, inspect VMAF, and review saved runs and HTML reports.
 - **Android (HaishinKit Example):** create exact YUV references from a camera or test pattern, encode bitrate variants, and prepare checksummed upload packages.
-- **Transfer:** LAN HTTP / HTTPS upload client and Bonjour discovery and a versioned package format. The macOS receiver/evaluation service is the next integration; it is not implemented yet.
+- **Transfer:** LAN HTTP / HTTPS upload client and Bonjour discovery with a versioned package format. The macOS app receives LAN HTTP uploads, advertises Bonjour, and queues VMAF evaluations into History.
+
+## 🖥️ macOS app
+
+Measure locally, receive device samples, and review saved results from the sidebar.
+The app supports English and Japanese and follows the system appearance.
+
+![VQMetrix macOS measurement](Assets/Screenshots/macos-measurement.png)
+
+Actual measurement of a synthetic 720p clip, encoded as H.264 at 0.5 Mbps.
+The displayed scores belong to this run, not a general codec benchmark.
+
+![VQMetrix macOS device receiver](Assets/Screenshots/macos-receiver.png)
+
+Start Receive to advertise this Mac through Bonjour. Enter its session-specific
+4-digit connection code on the sending device. LAN HTTP uploads are validated,
+evaluated serially, and saved to History with HTML report export.
 
 ## 🚀 Build
 

@@ -1,7 +1,7 @@
 # Transfer protocol v1
 
-This is the contract implemented by the Android producer. A macOS receiver and its
-evaluation queue remain to be implemented; the desktop app does not yet expose this API.
+Implemented by the Android producer and the macOS app. Enable Receive on the Mac to
+accept authenticated LAN HTTP uploads, validate packages and queue VMAF evaluation.
 
 ## Upload
 
@@ -11,7 +11,7 @@ Headers:
 
 - `Content-Type: application/zip`
 - `Content-Length`: complete package size; upload is streamed
-- `Authorization: Bearer <receiver token>`
+- `Authorization: Bearer <4-digit connection code>`
 - `Idempotency-Key`: run UUID, reused on retry
 - `X-VQMetrix-Protocol: 1`
 
@@ -83,11 +83,33 @@ status polling can use `GET /api/v1/jobs/<jobId>`; it is not required by the cur
 A receiver advertises `_vqmetrix._tcp` on the local network, using its listening port.
 TXT records are `protocol=1`, `scheme=http` or `scheme=https`, and `host=MacName.local`.
 Do not publish tokens or credentials in TXT records. The Android NSD browser filters
-incompatible advertisements and fills the selected URL. HTTP uses the address resolved by NSD so it does not depend on system .local DNS lookup; HTTPS keeps the hostname for certificate verification. The browser it never starts an upload
+incompatible advertisements and fills the selected URL. HTTP uses the address resolved by NSD so it does not depend on system .local DNS lookup; HTTPS keeps the hostname for certificate verification. The browser never starts an upload
 merely because a receiver appeared. Discovery does not establish receiver identity.
 
 HTTP accepts .local names and local IP literals only; resolved addresses must also be
 local (private, link-local or loopback, including IPv6 ULA). Redirects are disabled.
 HTTP transmits video and bearer tokens without encryption and is for trusted LAN
 use only. HTTPS uses the platform trust store and hostname verification.
-The macOS receiving service and Bonjour advertisement are not implemented yet.
+The macOS app advertises Bonjour while Receive is enabled. Its built-in endpoint uses LAN HTTP; direct HTTPS termination is not provided.
+
+## Desktop operation
+
+The macOS Receive page starts and stops the listener (default port 8787). Authentication
+uses a fresh 4-digit connection code for each receiving session. Enter it on the sending
+device; it is not advertised by Bonjour or persisted. Five failed authentication attempts
+pause all new upload authentication for 60 seconds, across connections. The listener rejects remote addresses outside private/link-local/loopback ranges.
+Up to four HTTP connections and eight queued/evaluating packages are allowed. Idle upload
+connections time out after 60 seconds. HTTP headers are limited to 16 KiB.
+
+Acceptance is returned after ZIP, CRC, manifest, sizes, SHA-256 and declared frame-map
+validation. The original ZIP and extracted payload remain in Application Support/VQMetrix/Uploads.
+Evaluation runs serially outside the HTTP handler. Decoded count, codec, dimensions and PTS
+are checked before scores are committed. Each variant appears as a settings segment in the
+existing History/HTML report. Failed evaluations retain their error and any completed segments.
+Invalid archives are retained separately with validation-error.txt; interrupted uploads are not
+shown as accepted. Queue state survives app restart; starting reception resumes pending work.
+
+The current evaluator accepts limited-range BT.709 SDR references, including mixer snapshots
+and synthetic patterns. Unspecified camera colors fail explicitly instead of assuming a matrix.
+Receiving can be stopped while accepted evaluations finish. Keep the Mac app running until
+jobs finish; interrupted evaluations are retried after reception starts on the next launch.

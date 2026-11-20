@@ -199,22 +199,6 @@ index 0b8d94fa..4b93c0de 100644
          var streamUrl by remember { mutableStateOf(Preference.shared.streamURL) }
          TextField(
              label = { Text("Publish URL (RTMP / SRT / WHIP)") },
-diff --git a/settings.gradle.kts b/settings.gradle.kts
-index 0b9a8225..4e736cc7 100644
---- a/settings.gradle.kts
-+++ b/settings.gradle.kts
-@@ -29,3 +29,11 @@ include(":rtmp")
- include(":srt")
- include(":vulkan")
- include(":rtc")
-+
-+// Optional developer tool when the VQMetrix checkout is available beside this repository.
-+val vqmetrixDirectory = file(providers.gradleProperty("vqmetrixDir").orElse("../VQMetrix/Android/producer").get())
-+if (vqmetrixDirectory.resolve("build.gradle.kts").isFile) {
-+    include(":vqmetrix-producer", ":vqmetrix-example")
-+    project(":vqmetrix-example").projectDir = file("app/vqmetrix")
-+    project(":vqmetrix-producer").projectDir = vqmetrixDirectory
-+}
 diff --git a/app/src/main/java/com/haishinkit/app/QualityCapture.kt b/app/src/main/java/com/haishinkit/app/QualityCapture.kt
 new file mode 100644
 index 00000000..e40f073e
@@ -442,10 +426,10 @@ index 00000000..0ce4792a
 +}
 diff --git a/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/VQMetrixActivity.kt b/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/VQMetrixActivity.kt
 new file mode 100644
-index 00000000..7a4043d6
+index 00000000..b496fa45
 --- /dev/null
 +++ b/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/VQMetrixActivity.kt
-@@ -0,0 +1,476 @@
+@@ -0,0 +1,481 @@
 +package com.haishinkit.app.vqmetrix
 +
 +import android.Manifest
@@ -457,6 +441,7 @@ index 00000000..7a4043d6
 +import android.graphics.Typeface
 +import android.os.Build
 +import android.os.Bundle
++import android.text.InputFilter
 +import android.text.InputType
 +import android.view.View
 +import android.view.WindowManager
@@ -654,7 +639,11 @@ index 00000000..7a4043d6
 +                override fun onNothingSelected(parent: AdapterView<*>?) {}
 +            }
 +        discover = button(R.string.vq_find_receivers, ::findReceivers)
-+        token = field("", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD).apply { hint = getString(R.string.vq_token) }
++        token =
++            field("", InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD).apply {
++                hint = getString(R.string.vq_token)
++                filters = arrayOf(InputFilter.LengthFilter(4))
++            }
 +        upload = button(R.string.vq_upload, ::uploadBatch)
 +        label(R.string.vq_receiver_note)
 +        label(R.string.vq_note)
@@ -798,7 +787,7 @@ index 00000000..7a4043d6
 +        val credential = token.text.toString()
 +        try {
 +            BatchUploader.endpoint(address)
-+            require(credential.isNotBlank())
++            require(credential.matches(Regex("[0-9]{4}"))) { getString(R.string.vq_token) }
 +        } catch (
 +            failure: Exception,
 +        ) {
@@ -936,7 +925,7 @@ index 00000000..b430c488
 +class VQMetrixFileProvider : FileProvider()
 diff --git a/app/vqmetrix/src/main/res/values-ja/strings.xml b/app/vqmetrix/src/main/res/values-ja/strings.xml
 new file mode 100644
-index 00000000..d07b4b0e
+index 00000000..0e4b0093
 --- /dev/null
 +++ b/app/vqmetrix/src/main/res/values-ja/strings.xml
 @@ -0,0 +1,47 @@
@@ -967,7 +956,7 @@ index 00000000..d07b4b0e
 +    <string name="vq_no_runs">作成済みのデータはありません</string>
 +    <string name="vq_receiver">macOSの受信サービス</string>
 +    <string name="vq_server">接続先URL（例：http://MacName.local:8787）</string>
-+    <string name="vq_token">受信サービスのトークン（保存しません）</string>
++    <string name="vq_token">接続コード（4桁・保存しません）</string>
 +    <string name="vq_upload">選択したデータをアップロード</string>
 +    <string name="vq_upload_progress">アップロード中: %1$d%%</string>
 +    <string name="vq_uploaded">受信サービスがジョブ %1$s を受け付けました</string>
@@ -989,7 +978,7 @@ index 00000000..d07b4b0e
 +</resources>
 diff --git a/app/vqmetrix/src/main/res/values/strings.xml b/app/vqmetrix/src/main/res/values/strings.xml
 new file mode 100644
-index 00000000..478de6d3
+index 00000000..b89d82e8
 --- /dev/null
 +++ b/app/vqmetrix/src/main/res/values/strings.xml
 @@ -0,0 +1,47 @@
@@ -1020,7 +1009,7 @@ index 00000000..478de6d3
 +    <string name="vq_no_runs">No completed packages yet</string>
 +    <string name="vq_receiver">macOS receiver</string>
 +    <string name="vq_server">Receiver URL, for example http://MacName.local:8787</string>
-+    <string name="vq_token">Receiver token (not saved)</string>
++    <string name="vq_token">Connection code (4 digits, not saved)</string>
 +    <string name="vq_upload">Upload selected package</string>
 +    <string name="vq_upload_progress">Uploading: %1$d%%</string>
 +    <string name="vq_uploaded">Receiver accepted job %1$s</string>
@@ -1056,3 +1045,19 @@ index 00000000..a3725f0c
 +++ b/app/vqmetrix/src/main/res/xml/vq_file_paths.xml
 @@ -0,0 +1 @@
 +<paths xmlns:android="http://schemas.android.com/apk/res/android"><files-path name="runs" path="runs/" /></paths>
+diff --git a/settings.gradle.kts b/settings.gradle.kts
+index 0b9a8225..4e736cc7 100644
+--- a/settings.gradle.kts
++++ b/settings.gradle.kts
+@@ -29,3 +29,11 @@ include(":rtmp")
+ include(":srt")
+ include(":vulkan")
+ include(":rtc")
++
++// Optional developer tool when the VQMetrix checkout is available beside this repository.
++val vqmetrixDirectory = file(providers.gradleProperty("vqmetrixDir").orElse("../VQMetrix/Android/producer").get())
++if (vqmetrixDirectory.resolve("build.gradle.kts").isFile) {
++    include(":vqmetrix-producer", ":vqmetrix-example")
++    project(":vqmetrix-example").projectDir = file("app/vqmetrix")
++    project(":vqmetrix-producer").projectDir = vqmetrixDirectory
++}

@@ -116,7 +116,7 @@ private struct Metric: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.caption).foregroundStyle(.secondary)
             Text(value).font(.system(size: 25, weight: .semibold, design: .rounded)).monospacedDigit()
-        }.frame(maxWidth: .infinity, alignment: .leading)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -158,7 +158,7 @@ struct BenchmarkView: View {
             HStack(spacing: 12) {
                 Image(nsImage: NSApplication.shared.applicationIconImage).resizable().frame(width: 48, height: 48)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("VQMetrix").font(.title.bold())
+                    Text(language.text("Measurement")).font(.largeTitle.bold())
                     Text(language.text("Measure video quality as you watch.")).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -246,7 +246,7 @@ struct BenchmarkView: View {
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(22)
-        .frame(minWidth: 960, minHeight: 780)
+        .frame(minWidth: 850, minHeight: 780)
         .onAppear { engine.language = language; refreshCameras() }
         .onChange(of: language) { engine.language = $0 }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in engine.stop() }
@@ -257,28 +257,56 @@ struct BenchmarkView: View {
 struct VQMetrixApp: App {
     var body: some Scene {
         WindowGroup("VQMetrix") { WorkspaceView() }
-            .defaultSize(width: 1080, height: 860)
+            .defaultSize(width: 1240, height: 880)
+    }
+}
+
+private enum WorkspacePage: String, CaseIterable, Identifiable {
+    case measurement = "Measurement", receive = "Receive", history = "History"
+    var id:String { rawValue }
+    var icon:String {
+        switch self { case .measurement:"waveform.path.ecg"; case .receive:"tray.and.arrow.down"; case .history:"clock.arrow.circlepath" }
     }
 }
 
 private struct WorkspaceView: View {
     @AppStorage("appLanguage") private var language = AppLanguage.system
+    @State private var page: WorkspacePage? = .measurement
+    @StateObject private var receiver = ReceiverModel()
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Picker(language.text("Language"), selection: $language) {
-                    Text(language.text("System")).tag(AppLanguage.system)
-                    Text("English").tag(AppLanguage.english)
-                    Text("日本語").tag(AppLanguage.japanese)
-                }.frame(width: 230)
-            }.padding(.horizontal, 24).padding(.top, 12)
-            TabView {
-                BenchmarkView(language: language)
-                    .tabItem { Label(language.text("Measurement"), systemImage: "waveform.path.ecg") }
-                HistoryView(language: language)
-                    .tabItem { Label(language.text("History"), systemImage: "clock.arrow.circlepath") }
+        NavigationSplitView {
+            VStack(alignment:.leading,spacing:16) {
+                HStack(spacing:10) {
+                    Image(nsImage:NSApplication.shared.applicationIconImage).resizable().frame(width:38,height:38).accessibilityHidden(true)
+                    VStack(alignment:.leading) {
+                        Text("VQMetrix").font(.headline)
+                        Text(language.text("Video quality workspace")).font(.caption).foregroundStyle(.secondary)
+                    }
+                }.padding(.horizontal,16).padding(.top,16)
+                List(WorkspacePage.allCases,selection:$page) { item in
+                    Label(language.text(item.rawValue),systemImage:item.icon).padding(.vertical,6).tag(item)
+                }.listStyle(.sidebar)
+                VStack(alignment:.leading,spacing:12) {
+                    Label(language.text(receiver.status),systemImage:receiver.isRunning ? "network" : "pause.circle")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Picker(language.text("Language"),selection:$language) {
+                        Text(language.text("System")).tag(AppLanguage.system)
+                        Text("English").tag(AppLanguage.english)
+                        Text("日本語").tag(AppLanguage.japanese)
+                    }.labelsHidden().accessibilityLabel(language.text("Language"))
+                }.padding(16)
+            }.navigationSplitViewColumnWidth(min:180,ideal:210,max:260)
+        } detail: {
+            ZStack {
+                ScrollView { BenchmarkView(language:language) }.opacity(page == .measurement ? 1:0)
+                    .allowsHitTesting(page == .measurement).accessibilityHidden(page != .measurement)
+                ReceiverView(language:language,receiver:receiver).opacity(page == .receive ? 1:0)
+                    .allowsHitTesting(page == .receive).accessibilityHidden(page != .receive)
+                HistoryView(language:language).opacity(page == .history ? 1:0)
+                    .allowsHitTesting(page == .history).accessibilityHidden(page != .history)
             }
-        }.environment(\.locale, language.locale)
+        }
+        .environment(\.locale,language.locale)
+        .onReceive(NotificationCenter.default.publisher(for:NSApplication.willTerminateNotification)) { _ in receiver.stop() }
     }
 }

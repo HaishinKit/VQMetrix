@@ -20,7 +20,7 @@ With JDK 17+ and Android SDK 37 installed, build from HaishinKit.kt:
 Use Save sample on its camera or MediaProjection screen. The VQMetrix screen in Preferences also creates test patterns and lets you choose H.264/HEVC,
 and target bitrates. Select a Bonjour receiver or enter its address, then upload a
 saved package. HTTP is limited to the trusted LAN; HTTPS requires a trusted certificate.
-The Mac receiving service is the next integration.
+Enable Receive in the macOS app to accept packages.
 
 For another checkout layout, use `-PvqmetrixDir=/absolute/path/VQMetrix/Android/producer`.
 The Example feature is omitted when the VQMetrix checkout is absent.

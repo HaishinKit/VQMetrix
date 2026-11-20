@@ -46,7 +46,7 @@ the token. On systems requiring local-network permission, allow it for a LAN rec
 Tokens are not saved. HTTP is restricted to local network addresses and .local names; video and tokens are unencrypted. HTTPS needs a system-trusted certificate; certificate
 validation is not bypassed. The upload contract is described in the transfer guide.
 
-The receiver picker browses Bonjour services automatically while this screen is visible. Choose a discovered Mac to fill its address. Manual entry remains available. The Mac receiver and its Bonjour advertisement are the next integration.
+The receiver picker browses Bonjour services automatically while this screen is visible. Choose a discovered Mac to fill its address. Manual entry remains available. The Mac receiver advertises Bonjour while receiving is enabled.
 
 ## HaishinKit Example integration
 
@@ -90,3 +90,17 @@ Pages is configured for GitHub Actions. No release tag is created by these instr
 In HaishinKit Example, use **VQMetrix · Save sample** on the camera or MediaProjection screen. It samples that existing mixer composition, including overlays, without opening a second camera or projection. Defaults are 3 seconds, 15 fps, within 640×480 while preserving aspect ratio; duration, codec and bitrates come from the VQMetrix screen after leaving it. Sampling is bounded and source shutdown cancels an unfinished capture; encoding and packaging can finish after capture completes. Open VQMetrix from Preferences to share or upload saved packages.
 
 These are sampled post-composition frames replayed with a CFR timeline, not the original live bitstream. Observed readback times are preserved. The comparison measures re-encoding of the stored reference; it does not include network effects. Android MediaCodec handles raw replay without changes to HaishinKit library code.
+
+## Receive on your Mac
+
+1. Choose **Receive** in the sidebar and click **Start receiving**. Allow local network access
+   if macOS asks, and allow the app through the firewall if needed.
+2. Keep the Mac and Android on the same trusted LAN. Android's VQMetrix receiver picker finds
+   this Mac through Bonjour; select it. A manual LAN address is also supported.
+3. Enter the Mac’s **4-digit connection code** in the sending device’s authentication field, then upload a saved package. A new code is issued whenever reception starts. Five wrong attempts trigger a one-minute cooldown.
+4. The Mac shows transfer progress, validation and queued/evaluating/completed/failed jobs.
+   Open **History** for per-bitrate VMAF scores, notes and an HTML report.
+
+The port is editable while reception is stopped. Stop receiving closes incoming connections,
+but accepted jobs keep evaluating. HTTP video/token traffic is unencrypted; the built-in
+receiver is intended for trusted LAN development. It does not provide WAN HTTPS hosting.
