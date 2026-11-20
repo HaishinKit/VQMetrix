@@ -7,7 +7,7 @@
 
 Video quality development tools built on HaishinKit.
 
-- **macOS:** compare reference and decoded video, change H.264/HEVC and bitrate, inspect VMAF and sender performance, and review saved runs and HTML reports.
+- **macOS:** compare reference and decoded video, change H.264/HEVC and bitrate, inspect VMAF and sender performance, estimate bitrate for a target mean VMAF, and review saved runs and HTML reports.
 - **Android (HaishinKit Example):** create exact YUV references from a camera or test pattern, encode bitrate variants, and prepare checksummed upload packages.
 - **Transfer:** LAN HTTP / HTTPS upload client and Bonjour discovery with a versioned package format. The macOS app receives LAN HTTP uploads, advertises Bonjour, and queues VMAF evaluations into History.
 
@@ -18,9 +18,15 @@ The app supports English and Japanese and follows the system appearance.
 
 ![VQMetrix macOS measurement](Assets/Screenshots/macos-measurement.png)
 
-VQMetrix 1.1.0 measuring a synthetic 640×360 clip for 30 seconds, encoded as H.264 Main at 0.5 Mbps.
-The timeline shows five score bands and a target line at 90.
+VQMetrix 1.2.0 measuring a synthetic 640×360 clip for 2 seconds, encoded as H.264 Main at 0.5 Mbps.
+The timeline shows five score bands and a target line at 92.5.
 The displayed scores belong to this run, not a general codec benchmark.
+
+![VQMetrix bitrate search history](Assets/Screenshots/macos-bitrate-search.png)
+
+A saved search targeting mean VMAF 92.5, including all attempts and confirmation.
+The 0.5 Mbps estimate applies to this sample; the trial limit was reached before the requested precision.
+See the [bitrate search guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/bitratesearch/).
 
 ![VQMetrix macOS device receiver](Assets/Screenshots/macos-receiver.png)
 
@@ -33,7 +39,7 @@ evaluated serially, and saved to History with HTML report export.
 Add JitPack to the consuming project's repositories, then use:
 
 ```kotlin
-implementation("com.github.HaishinKit:VQMetrix:1.0.0")
+implementation("com.github.HaishinKit:VQMetrix:1.2.0")
 ```
 
 See [Android installation](Android/README.md) for the complete repository setup.
@@ -89,7 +95,7 @@ is experimental; capture availability depends on the device and environment.
 
 ## 📦 Development builds
 
-The `1.1.0` tag attaches a macOS ZIP, Android transfer library, API documentation, and
+The `1.2.0` tag attaches a macOS ZIP, Android transfer library, API documentation, and
 checksums to [GitHub Release](https://github.com/HaishinKit/VQMetrix/releases). macOS builds
 are ad hoc signed and not notarized. Android Example APK distribution is managed by HaishinKit.kt.
 

@@ -2,7 +2,7 @@
 
 Find a confirmed bitrate candidate for a fixed sample and an arbitrary mean VMAF target.
 
-This feature is in development after 1.1.0 and is not included in the 1.1.0 release.
+Available starting in VQMetrix 1.2.0.
 
 ## Run a search
 

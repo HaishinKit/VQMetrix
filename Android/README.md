@@ -25,11 +25,11 @@ In the consuming module:
 
 ```kotlin
 dependencies {
-    implementation("com.github.HaishinKit:VQMetrix:1.0.0")
+    implementation("com.github.HaishinKit:VQMetrix:1.2.0")
 }
 ```
 
-`1.0.0` is the release tag and dependency version; do not add a `v` prefix.
+`1.2.0` is the release tag and dependency version; do not add a `v` prefix.
 The library does not enable cleartext traffic globally. The host app must explicitly
 allow LAN HTTP when using the built-in Mac receiver and request local-network permission
 on Android versions that require it. HTTPS uses the platform trust store.
