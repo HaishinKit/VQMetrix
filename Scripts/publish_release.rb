@@ -7,7 +7,7 @@ abort 'Invalid release tag' unless tag.match?(/\Av?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-
 repository = ENV.fetch('GITHUB_REPOSITORY')
 macos = Dir[File.join(root, 'VQMetrix-macos-*.zip')]
 abort 'Expected exactly one macOS archive' unless macos.length == 1
-assets = macos + %w[VQMetrix-Android-debug.apk api-documentation.tar.gz].map { |name| File.join(root,name) }
+assets = macos + %w[HaishinKit-Example-debug.apk api-documentation.tar.gz].map { |name| File.join(root,name) }
 assets.each { |path| abort "Missing release asset #{File.basename(path)}" unless File.file?(path) }
 checksums = File.join(root, 'SHA256SUMS.txt')
 File.write(checksums, assets.map { |path| "#{Digest::SHA256.file(path).hexdigest}  #{File.basename(path)}" }.join("\n")+"\n")

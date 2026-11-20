@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
+import java.net.InetAddress
 import java.net.URI
 import java.net.URL
 import java.time.Instant
@@ -24,6 +25,10 @@ class BatchUploader(private val openConnection: (URL) -> HttpURLConnection = { i
     ): String =
         withContext(Dispatchers.IO) {
             val endpoint = endpoint(server)
+            if (endpoint.protocol == "http") {
+                val addresses = InetAddress.getAllByName(endpoint.host.removePrefix("[").removeSuffix("]"))
+                require(addresses.isNotEmpty() && addresses.all(::isLocalAddress)) { "HTTP is limited to local network receivers" }
+            }
             require(token.isNotBlank() && !token.contains('\r') && !token.contains('\n')) { "A receiver token is required" }
             require(batch.archive.isFile && batch.archive.length() > 0)
             val connection =
@@ -90,14 +95,25 @@ class BatchUploader(private val openConnection: (URL) -> HttpURLConnection = { i
     }
 
     companion object {
+        private fun isLocalAddress(address: InetAddress): Boolean =
+            address.isLoopbackAddress || address.isSiteLocalAddress || address.isLinkLocalAddress ||
+                (address.address.size == 16 && (address.address[0].toInt() and 0xfe) == 0xfc)
+
         fun endpoint(server: String): URL {
             val uri = URI(server.trim())
             require(
-                uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank() &&
+                (uri.scheme.equals("https", ignoreCase = true) || uri.scheme.equals("http", ignoreCase = true)) && !uri.host.isNullOrBlank() &&
                     uri.userInfo == null && uri.query == null && uri.fragment == null &&
                     (uri.port == -1 || uri.port in 1..65535),
-            ) { "Enter an HTTPS receiver base URL" }
-            return URI("https", null, uri.host, uri.port, uri.path.orEmpty().trimEnd('/') + "/api/v1/runs", null, null).toURL()
+            ) { "Enter an HTTP or HTTPS receiver base URL" }
+            if (uri.scheme.equals("http", ignoreCase = true)) {
+                val host = uri.host.removePrefix("[").removeSuffix("]").lowercase()
+                val literal = host.contains(':') || host.matches(Regex("[0-9.]+"))
+                require(host.endsWith(".local") || host == "localhost" || (literal && isLocalAddress(InetAddress.getByName(host)))) {
+                    "HTTP is limited to .local names or local network addresses"
+                }
+            }
+            return URI(uri.scheme.lowercase(), null, uri.host, uri.port, uri.path.orEmpty().trimEnd('/') + "/api/v1/runs", null, null).toURL()
         }
     }
 }

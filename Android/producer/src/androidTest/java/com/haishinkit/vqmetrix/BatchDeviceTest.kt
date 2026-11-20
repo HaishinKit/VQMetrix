@@ -71,13 +71,55 @@ class BatchDeviceTest {
         }
 
     @Test
+    fun mixerSnapshotsUsePublicScreenApiAndEncodeWithoutSdkChanges() =
+        runBlocking {
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            val context = instrumentation.targetContext
+            ActivityScenario.launch<CaptureTestActivity>(Intent(context, CaptureTestActivity::class.java)).use { scenario ->
+                lateinit var screen: com.haishinkit.screen.Screen
+                scenario.onActivity {
+                    screen =
+                        com.haishinkit.screen.Screen.createOpenGL(it).apply {
+                            frame = android.graphics.Rect(0, 0, 320, 180)
+                            addChild(
+                                com.haishinkit.screen.ImageScreenObject().apply {
+                                    bitmap = android.graphics.Bitmap.createBitmap(320, 180, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.WHITE) }
+                                    frame = android.graphics.Rect(0, 0, 320, 180)
+                                },
+                            )
+                        }
+                }
+                kotlinx.coroutines.delay(300)
+                try {
+                    val batch = BatchPipeline(context).create(BatchConfig(320, 180, 15, 1, listOf(300_000), "h264", false), {}, {}, ScreenReference(screen, "projection"))
+                    try {
+                        val manifest = JSONObject(File(batch.directory, "manifest.json").readText())
+                        val reference = manifest.getJSONObject("reference")
+                        assertEquals("mixer-projection", reference.getString("source"))
+                        assertEquals(15, reference.getInt("frameCount"))
+                        assertEquals("bt709", reference.getString("colorMatrix"))
+                        Y4mReader(File(batch.directory, "reference.y4m"), ReferenceSpec(320, 180, 15, 15)).use { reader ->
+                            val frame = reader.next()!!
+                            assertTrue("Expected opaque white mixer content; got ${frame[0].toInt() and 255}", (frame[0].toInt() and 255) in 233..235)
+                            assertEquals(128, frame[320 * 180].toInt() and 255)
+                        }
+                    } finally {
+                        batch.directory.deleteRecursively()
+                    }
+                } finally {
+                    scenario.onActivity { screen.dispose() }
+                }
+            }
+        }
+
+    @Test
     fun cameraReferenceContainsAllCapturedPlanesAndTimestamps() =
         runBlocking {
             val instrumentation = InstrumentationRegistry.getInstrumentation()
             val context = instrumentation.targetContext
             instrumentation.uiAutomation.grantRuntimePermission(context.packageName, Manifest.permission.CAMERA)
-            val intent = Intent(context, VQMetrixActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            ActivityScenario.launch<VQMetrixActivity>(intent).use {
+            val intent = Intent(context, CaptureTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ActivityScenario.launch<CaptureTestActivity>(intent).use {
                 val file = File(context.cacheDir, "camera-reference.y4m")
                 try {
                     val result =

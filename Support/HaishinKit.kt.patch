@@ -1,11 +1,13 @@
 diff --git a/app/build.gradle.kts b/app/build.gradle.kts
-index 217e2424..d0e15a2c 100644
+index 217e2424..e4c5f44a 100644
 --- a/app/build.gradle.kts
 +++ b/app/build.gradle.kts
-@@ -14,6 +14,7 @@ android {
+@@ -13,7 +13,8 @@ android {
+         minSdk = 29
          targetSdk = 37
          versionCode = 1
-         versionName = "1.0"
+-        versionName = "1.0"
++        versionName = providers.gradleProperty("appVersionName").orElse("1.0").get()
 +        buildConfigField("boolean", "VQMETRIX_AVAILABLE", (rootProject.findProject(":vqmetrix-producer") != null).toString())
  
          testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -27,16 +29,160 @@ index 217e2424..d0e15a2c 100644
  
  dependencies {
 +    if (rootProject.findProject(":vqmetrix-producer") != null) {
-+        implementation(project(":vqmetrix-producer"))
++        implementation(project(":vqmetrix-example"))
 +    }
      implementation(project(":haishinkit"))
      implementation(project(":vulkan"))
      implementation(project(":rtmp"))
+diff --git a/app/src/main/java/com/haishinkit/app/CameraScreen.kt b/app/src/main/java/com/haishinkit/app/CameraScreen.kt
+index 58cca9e8..32840c49 100644
+--- a/app/src/main/java/com/haishinkit/app/CameraScreen.kt
++++ b/app/src/main/java/com/haishinkit/app/CameraScreen.kt
+@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
+ import androidx.compose.foundation.pager.HorizontalPager
+ import androidx.compose.foundation.pager.rememberPagerState
+ import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.material3.Button
+ import androidx.compose.material3.Text
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.DisposableEffect
+@@ -41,6 +42,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
+ import androidx.compose.ui.input.pointer.pointerInput
+ import androidx.compose.ui.platform.LocalConfiguration
+ import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.res.stringResource
+ import androidx.compose.ui.text.style.TextAlign
+ import androidx.compose.ui.unit.dp
+ import androidx.lifecycle.compose.LocalLifecycleOwner
+@@ -297,6 +299,11 @@ fun CameraScreen(
+                             .padding(32.dp),
+                 )
+ 
++                if (BuildConfig.VQMETRIX_AVAILABLE) {
++                    Button(onClick = { viewModel.captureQuality(context) }) {
++                        Text(stringResource(R.string.vq_capture_action))
++                    }
++                }
+                 CameraControllerView(
+                     isRecording = recorderState.isRecording,
+                     isConnected = sessionActive,
+diff --git a/app/src/main/java/com/haishinkit/app/CameraViewModel.kt b/app/src/main/java/com/haishinkit/app/CameraViewModel.kt
+index a4d09a4b..15cedb2b 100644
+--- a/app/src/main/java/com/haishinkit/app/CameraViewModel.kt
++++ b/app/src/main/java/com/haishinkit/app/CameraViewModel.kt
+@@ -283,7 +283,12 @@ class CameraViewModel(
+         DebugFrameCapture.attach(this, mixer.screen)
+     }
+ 
++    fun captureQuality(context: Context) {
++        QualityCapture.save(context, mixer.screen, "camera")
++    }
++
+     fun stopRunning() {
++        QualityCapture.stop("camera")
+         DebugFrameCapture.detach(this)
+         mixer.stopRunning()
+     }
+@@ -297,6 +302,7 @@ class CameraViewModel(
+     }
+ 
+     override suspend fun stopForRendererChange() {
++        QualityCapture.stop("camera")
+         DebugFrameCapture.detach(this)
+         if (recorder.isRecording) recorder.stopRecording()
+         mixer.stopRunning()
+diff --git a/app/src/main/java/com/haishinkit/app/MediaProjectionBinding.kt b/app/src/main/java/com/haishinkit/app/MediaProjectionBinding.kt
+index cf69cb4e..8f726b83 100644
+--- a/app/src/main/java/com/haishinkit/app/MediaProjectionBinding.kt
++++ b/app/src/main/java/com/haishinkit/app/MediaProjectionBinding.kt
+@@ -38,6 +38,10 @@ internal class MediaProjectionBinding(private val context: Context) : ServiceCon
+         isStarted = isBound
+     }
+ 
++    fun saveQuality() {
++        messenger?.send(Message.obtain(null, MediaProjectionService.MSG_SAVE_QUALITY))
++    }
++
+     fun stop() {
+         if (!isBound) return
+         isStopping = true
+diff --git a/app/src/main/java/com/haishinkit/app/MediaProjectionScreen.kt b/app/src/main/java/com/haishinkit/app/MediaProjectionScreen.kt
+index 8ea325b1..2a1e04ac 100644
+--- a/app/src/main/java/com/haishinkit/app/MediaProjectionScreen.kt
++++ b/app/src/main/java/com/haishinkit/app/MediaProjectionScreen.kt
+@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.res.stringResource
+ import androidx.compose.ui.unit.dp
+ 
+ @Suppress("ktlint:standard:function-naming")
+@@ -55,6 +56,11 @@ fun MediaProjectionScreen(modifier: Modifier = Modifier) {
+                 trackColor = MaterialTheme.colorScheme.surfaceVariant,
+             )
+         }
++        if (BuildConfig.VQMETRIX_AVAILABLE && binding.isStarted && !binding.isStopping) {
++            Button(onClick = { binding.saveQuality() }, modifier = Modifier.align(Alignment.BottomStart)) {
++                Text(stringResource(R.string.vq_capture_action))
++            }
++        }
+         Button(
+             modifier = Modifier.align(Alignment.BottomEnd),
+             enabled = !binding.isStopping,
+diff --git a/app/src/main/java/com/haishinkit/app/MediaProjectionService.kt b/app/src/main/java/com/haishinkit/app/MediaProjectionService.kt
+index 37a4822b..6306fd94 100644
+--- a/app/src/main/java/com/haishinkit/app/MediaProjectionService.kt
++++ b/app/src/main/java/com/haishinkit/app/MediaProjectionService.kt
+@@ -78,6 +78,11 @@ class MediaProjectionService :
+         object : Handler(Looper.getMainLooper()) {
+             override fun handleMessage(msg: Message) {
+                 when (msg.what) {
++                    MSG_SAVE_QUALITY -> {
++                        if (BuildConfig.VQMETRIX_AVAILABLE && mixer.hasVideo && mixer.isRunning.get()) {
++                            QualityCapture.save(applicationContext, mixer.screen, "projection")
++                        }
++                    }
+                     MSG_CONNECT -> {
+                         Log.i(TAG, "MSG_CONNECT")
+                     }
+@@ -141,6 +146,7 @@ class MediaProjectionService :
+                     mixer.attachVideo(0, source).onSuccess {
+                         mixer.screen.frame =
+                             Rect(0, 0, source.videoSize.width, source.videoSize.height)
++                        mixer.startRunning()
+                         session.connect()
+                     }
+                 }
+@@ -159,6 +165,7 @@ class MediaProjectionService :
+     }
+ 
+     override suspend fun stopForRendererChange() {
++        QualityCapture.stop("projection")
+         serviceJob.cancelAndJoin()
+         shutdownMutex.withLock {
+             if (outputsClosed) return@withLock
+@@ -200,6 +207,7 @@ class MediaProjectionService :
+         const val MSG_SET_VIDEO_EFFECT = 2
+         const val MSG_SET_MEDIA_PROJECTION = 3
+         const val MSG_CLOSED = 4
++        const val MSG_SAVE_QUALITY = 5
+ 
+         private const val EXTRA_RESULT_CODE = "EXTRA_RESULT_CODE"
+         private const val EXTRA_RESULT_DATA = "EXTRA_RESULT_DATA"
 diff --git a/app/src/main/java/com/haishinkit/app/PreferenceScreen.kt b/app/src/main/java/com/haishinkit/app/PreferenceScreen.kt
-index 0b8d94fa..7797bf93 100644
+index 0b8d94fa..4b93c0de 100644
 --- a/app/src/main/java/com/haishinkit/app/PreferenceScreen.kt
 +++ b/app/src/main/java/com/haishinkit/app/PreferenceScreen.kt
-@@ -60,6 +60,16 @@ fun PreferenceScreen(
+@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.platform.LocalContext
+ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
++import androidx.compose.ui.res.stringResource
+ import androidx.compose.ui.semantics.Role
+ import androidx.compose.ui.text.input.ImeAction
+ import androidx.compose.ui.text.input.KeyboardType
+@@ -60,6 +61,16 @@ fun PreferenceScreen(
          verticalArrangement = Arrangement.spacedBy(8.dp),
      ) {
          val keyboardController = LocalSoftwareKeyboardController.current
@@ -44,92 +190,20 @@ index 0b8d94fa..7797bf93 100644
 +            val qualityToolContext = LocalContext.current
 +            Button(onClick = {
 +                qualityToolContext.startActivity(
-+                    Intent().setClassName(qualityToolContext, "com.haishinkit.vqmetrix.VQMetrixActivity"),
++                    Intent().setClassName(qualityToolContext, "com.haishinkit.app.vqmetrix.VQMetrixActivity"),
 +                )
 +            }) {
-+                Text("VQMetrix — Quality test capture")
++                Text(stringResource(R.string.vq_open_tool))
 +            }
 +        }
          var streamUrl by remember { mutableStateOf(Preference.shared.streamURL) }
          TextField(
              label = { Text("Publish URL (RTMP / SRT / WHIP)") },
-diff --git a/haishinkit/src/main/java/com/haishinkit/codec/VideoCodec.kt b/haishinkit/src/main/java/com/haishinkit/codec/VideoCodec.kt
-index 22975a5a..63b7f762 100644
---- a/haishinkit/src/main/java/com/haishinkit/codec/VideoCodec.kt
-+++ b/haishinkit/src/main/java/com/haishinkit/codec/VideoCodec.kt
-@@ -117,7 +117,9 @@ class VideoCodec(
-     var frameRate = DEFAULT_FRAME_RATE
-         set(value) {
-             field = value
--            pixelTransform.frameRate = value
-+            if (inputColorFormat == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
-+                pixelTransform.frameRate = value
-+            }
-         }
- 
-     /**
-@@ -140,6 +142,19 @@ class VideoCodec(
-      */
-     var profileLevel: VideoCodecProfileLevel = DEFAULT_PROFILE_LEVEL
- 
-+    /**
-+     * Encoder input color format. Set before starting the codec.
-+     *
-+     * The default uses a rendering surface. Set `COLOR_FormatYUV420Flexible` to
-+     * supply images through [Codec.Listener.onInputBufferAvailable] instead.
-+     * The selected encoder must support the requested format.
-+     */
-+    var inputColorFormat: Int = DEFAULT_COLOR_FORMAT
-+        set(value) {
-+            check(!isRunning.get()) { "Set the input color format before starting the codec." }
-+            field = value
-+        }
-+
-     /**
-      * The pixel transform instance.
-      */
-@@ -160,17 +175,12 @@ class VideoCodec(
-     override var codec: MediaCodec?
-         get() = super.codec
-         set(value) {
--            if (value == null) {
-+            if (value == null && inputColorFormat == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
-                 pixelTransform.surface = null
-             }
-             super.codec = value
-         }
- 
--    /**
--     * Specifies the color format for a surface.
--     */
--    private var colorFormat = DEFAULT_COLOR_FORMAT
--
-     override fun createMediaFormat(mime: String): MediaFormat =
-         MediaFormat.createVideoFormat(mime, width, height).apply {
-             if (mode == MODE_ENCODE) {
-@@ -180,7 +190,7 @@ class VideoCodec(
-                 setInteger(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 1000000 / frameRate)
-                 setInteger(MediaFormat.KEY_CHANNEL_COUNT, 1)
-                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFrameInterval)
--                setInteger(MediaFormat.KEY_COLOR_FORMAT, colorFormat)
-+                setInteger(MediaFormat.KEY_COLOR_FORMAT, inputColorFormat)
-                 setInteger(MediaFormat.KEY_PROFILE, profileLevel.profile)
-                 if (Build.VERSION_CODES.M <= Build.VERSION.SDK_INT) {
-                     setInteger(MediaFormat.KEY_LEVEL, profileLevel.level)
-@@ -196,7 +206,7 @@ class VideoCodec(
- 
-     override fun configure(codec: MediaCodec) {
-         super.configure(codec)
--        if (mode == MODE_ENCODE) {
-+        if (mode == MODE_ENCODE && inputColorFormat == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
-             pixelTransform.imageExtent = Size(width, height)
-             pixelTransform.surface = codec.createInputSurface()
-         }
 diff --git a/settings.gradle.kts b/settings.gradle.kts
-index 0b9a8225..23c105c3 100644
+index 0b9a8225..4e736cc7 100644
 --- a/settings.gradle.kts
 +++ b/settings.gradle.kts
-@@ -29,3 +29,10 @@ include(":rtmp")
+@@ -29,3 +29,11 @@ include(":rtmp")
  include(":srt")
  include(":vulkan")
  include(":rtc")
@@ -137,48 +211,848 @@ index 0b9a8225..23c105c3 100644
 +// Optional developer tool when the VQMetrix checkout is available beside this repository.
 +val vqmetrixDirectory = file(providers.gradleProperty("vqmetrixDir").orElse("../VQMetrix/Android/producer").get())
 +if (vqmetrixDirectory.resolve("build.gradle.kts").isFile) {
-+    include(":vqmetrix-producer")
++    include(":vqmetrix-producer", ":vqmetrix-example")
++    project(":vqmetrix-example").projectDir = file("app/vqmetrix")
 +    project(":vqmetrix-producer").projectDir = vqmetrixDirectory
 +}
-diff --git a/haishinkit/src/test/java/com/haishinkit/codec/VideoCodecRawInputTest.kt b/haishinkit/src/test/java/com/haishinkit/codec/VideoCodecRawInputTest.kt
+diff --git a/app/src/main/java/com/haishinkit/app/QualityCapture.kt b/app/src/main/java/com/haishinkit/app/QualityCapture.kt
 new file mode 100644
-index 00000000..1c5abeb7
+index 00000000..e40f073e
 --- /dev/null
-+++ b/haishinkit/src/test/java/com/haishinkit/codec/VideoCodecRawInputTest.kt
-@@ -0,0 +1,36 @@
-+package com.haishinkit.codec
++++ b/app/src/main/java/com/haishinkit/app/QualityCapture.kt
+@@ -0,0 +1,27 @@
++package com.haishinkit.app
 +
-+import android.media.MediaCodecInfo
-+import com.haishinkit.graphics.PixelTransform
-+import org.junit.Assert.assertEquals
-+import org.junit.Assert.assertThrows
-+import org.junit.Test
-+import org.junit.runner.RunWith
-+import org.robolectric.RobolectricTestRunner
-+import org.robolectric.RuntimeEnvironment
-+import org.robolectric.annotation.Config
++import android.content.Context
++import android.widget.Toast
++import com.haishinkit.screen.Screen
 +
-+@RunWith(RobolectricTestRunner::class)
-+@Config(manifest = Config.NONE, sdk = [29])
-+class VideoCodecRawInputTest {
-+    @Test
-+    fun rawInputDoesNotCreateASurfaceRenderer() {
-+        val previous = PixelTransform.factory
-+        PixelTransform.factory = { throw AssertionError("Raw input must not allocate a renderer") }
-+        val codec = VideoCodec(RuntimeEnvironment.getApplication())
-+        try {
-+            assertEquals(MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface, codec.inputColorFormat)
-+            codec.inputColorFormat = MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
-+            codec.frameRate = 15
-+            codec.isRunning.set(true)
-+            assertThrows(IllegalStateException::class.java) {
-+                codec.inputColorFormat = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
-+            }
-+            codec.isRunning.set(false)
-+            codec.dispose()
-+        } finally {
-+            codec.isRunning.set(false)
-+            PixelTransform.factory = previous
++/** Keeps the optional VQMetrix checkout out of the normal Example build. */
++internal object QualityCapture {
++    fun save(
++        context: Context,
++        screen: Screen,
++        source: String,
++    ) {
++        runCatching {
++            Class.forName("com.haishinkit.app.vqmetrix.MixerCapture")
++                .getMethod("start", Context::class.java, Screen::class.java, String::class.java)
++                .invoke(null, context, screen, source)
++        }.onFailure { Toast.makeText(context, it.cause?.message ?: it.message, Toast.LENGTH_LONG).show() }
++    }
++
++    fun stop(source: String) {
++        if (!BuildConfig.VQMETRIX_AVAILABLE) return
++        runCatching {
++            Class.forName("com.haishinkit.app.vqmetrix.MixerCapture").getMethod("stop", String::class.java).invoke(null, source)
 +        }
 +    }
 +}
+diff --git a/app/src/main/res/values-ja/vqmetrix.xml b/app/src/main/res/values-ja/vqmetrix.xml
+new file mode 100644
+index 00000000..73854693
+--- /dev/null
++++ b/app/src/main/res/values-ja/vqmetrix.xml
+@@ -0,0 +1,4 @@
++<resources>
++    <string name="vq_capture_action">VQMetrix・素材を保存</string>
++    <string name="vq_open_tool">VQMetrix・保存した素材とアップロード</string>
++</resources>
+diff --git a/app/src/main/res/values/vqmetrix.xml b/app/src/main/res/values/vqmetrix.xml
+new file mode 100644
+index 00000000..8b2fe07f
+--- /dev/null
++++ b/app/src/main/res/values/vqmetrix.xml
+@@ -0,0 +1,4 @@
++<resources>
++    <string name="vq_capture_action">VQMetrix · Save sample</string>
++    <string name="vq_open_tool">VQMetrix · Saved samples and upload</string>
++</resources>
+diff --git a/app/vqmetrix/README.md b/app/vqmetrix/README.md
+new file mode 100644
+index 00000000..64a86344
+--- /dev/null
++++ b/app/vqmetrix/README.md
+@@ -0,0 +1,24 @@
++# 📊 VQMetrix Example
++
++Optional UI for the [VQMetrix](https://github.com/HaishinKit/VQMetrix) Android library.
++Place VQMetrix beside HaishinKit.kt, or set `-PvqmetrixDir=/path/to/VQMetrix/Android/producer`.
++
++## 🚀 Use
++
++Build `:app:assembleDebug`. Camera Publish and MediaProjection offer **Save sample**
++from their existing mixer composition. Preferences → VQMetrix configures duration,
++codec and bitrates and lets you share or upload saved packages. Capture is limited
++to 15 fps within 640×480; it preserves aspect ratio and records observed readback times.
++The source must keep running while samples are acquired. Source shutdown cancels an
++unfinished capture; re-encoding can finish after capture completes.
++
++## 📚 Scope
++
++UI and lifecycle hooks belong to this Example. Capture, exact-frame replay through
++Android MediaCodec, ZIP packaging, upload and Bonjour discovery belong to VQMetrix.
++No HaishinKit library changes are required. The feature is omitted without VQMetrix.
++
++This evaluates re-encoding of sampled composition, rather than the original live
++stream or network delivery. See VQMetrix's transfer and user guides for details.
++HTTP is limited to trusted local networks; video and tokens are unencrypted over HTTP.
++The macOS upload receiver is not implemented yet.
+diff --git a/app/vqmetrix/build.gradle.kts b/app/vqmetrix/build.gradle.kts
+new file mode 100644
+index 00000000..649ff7a9
+--- /dev/null
++++ b/app/vqmetrix/build.gradle.kts
+@@ -0,0 +1,23 @@
++plugins {
++    alias(libs.plugins.androidLibrary)
++    alias(libs.plugins.jetbrainsKotlinAndroid)
++}
++
++android {
++    namespace = "com.haishinkit.app.vqmetrix"
++    compileSdk = 37
++    defaultConfig { minSdk = 29 }
++    compileOptions {
++        sourceCompatibility = JavaVersion.VERSION_17
++        targetCompatibility = JavaVersion.VERSION_17
++    }
++    kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
++}
++
++dependencies {
++    implementation(project(":vqmetrix-producer"))
++    implementation(project(":haishinkit"))
++    implementation(libs.androidx.appcompat)
++    implementation(libs.androidx.lifecycle.runtime.ktx)
++    implementation(libs.kotlinx.coroutines.core)
++}
+diff --git a/app/vqmetrix/src/main/AndroidManifest.xml b/app/vqmetrix/src/main/AndroidManifest.xml
+new file mode 100644
+index 00000000..1dc5f54e
+--- /dev/null
++++ b/app/vqmetrix/src/main/AndroidManifest.xml
+@@ -0,0 +1,15 @@
++<manifest xmlns:android="http://schemas.android.com/apk/res/android">
++    <uses-permission android:name="android.permission.CAMERA" />
++    <uses-permission android:name="android.permission.INTERNET" />
++    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
++    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
++    <application>
++        <activity android:name="com.haishinkit.app.vqmetrix.VQMetrixActivity" android:exported="false"
++            android:theme="@style/VQMetrixTheme" android:label="@string/vq_app_name"
++            android:configChanges="orientation|screenSize" />
++        <provider android:name="com.haishinkit.app.vqmetrix.VQMetrixFileProvider" android:authorities="${applicationId}.vqmetrix.files"
++            android:exported="false" android:grantUriPermissions="true">
++            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/vq_file_paths" />
++        </provider>
++    </application>
++</manifest>
+diff --git a/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/MixerCapture.kt b/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/MixerCapture.kt
+new file mode 100644
+index 00000000..0ce4792a
+--- /dev/null
++++ b/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/MixerCapture.kt
+@@ -0,0 +1,86 @@
++package com.haishinkit.app.vqmetrix
++
++import android.content.Context
++import android.os.Handler
++import android.os.Looper
++import android.widget.Toast
++import com.haishinkit.screen.Screen
++import com.haishinkit.vqmetrix.BatchConfig
++import com.haishinkit.vqmetrix.BatchPipeline
++import com.haishinkit.vqmetrix.ScreenReference
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.CoroutineScope
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.Job
++import kotlinx.coroutines.SupervisorJob
++import kotlinx.coroutines.launch
++
++/** Example-owned controller: one bounded snapshot session from an existing mixer. */
++object MixerCapture {
++    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
++    private val handler = Handler(Looper.getMainLooper())
++    private var job: Job? = null
++    private var source: String? = null
++    private var sampling = false
++
++    @JvmStatic
++    fun start(
++        context: Context,
++        screen: Screen,
++        source: String,
++    ) {
++        if (Looper.myLooper() != Looper.getMainLooper()) {
++            handler.post { start(context, screen, source) }
++            return
++        }
++        val app = context.applicationContext
++        if (job?.isActive == true) {
++            Toast.makeText(app, R.string.vq_capture_busy, Toast.LENGTH_SHORT).show()
++            return
++        }
++        val preferences = app.getSharedPreferences("vqmetrix-capture", Context.MODE_PRIVATE)
++        val config =
++            runCatching {
++                BatchConfig(
++                    640,
++                    480,
++                    15,
++                    preferences.getInt("seconds", 3),
++                    BatchConfig.parseBitrates(preferences.getString("bitrates", "0.5,1,2").orEmpty()),
++                    preferences.getString("codec", "h264").orEmpty(),
++                    false,
++                )
++            }.getOrElse {
++                Toast.makeText(app, R.string.vq_invalid, Toast.LENGTH_LONG).show()
++                return
++            }
++        this.source = source
++        sampling = true
++        Toast.makeText(app, R.string.vq_capture_started, Toast.LENGTH_LONG).show()
++        job =
++            scope.launch {
++                try {
++                    val result =
++                        BatchPipeline(app).create(config, { progress ->
++                            if (progress.stage != "reference") handler.post { sampling = false }
++                        }, {}, ScreenReference(screen, source))
++                    Toast.makeText(app, app.getString(R.string.vq_capture_saved, result.runId.take(8)), Toast.LENGTH_LONG).show()
++                } catch (_: CancellationException) {
++                    Toast.makeText(app, R.string.vq_cancelled, Toast.LENGTH_SHORT).show()
++                } catch (error: Exception) {
++                    Toast.makeText(app, app.getString(R.string.vq_error, error.message), Toast.LENGTH_LONG).show()
++                } finally {
++                    sampling = false
++                    this@MixerCapture.source = null
++                    job = null
++                }
++            }
++    }
++
++    @JvmStatic
++    fun stop(source: String) {
++        handler.post {
++            if (this.source == source && sampling) job?.cancel()
++        }
++    }
++}
+diff --git a/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/VQMetrixActivity.kt b/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/VQMetrixActivity.kt
+new file mode 100644
+index 00000000..7a4043d6
+--- /dev/null
++++ b/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/VQMetrixActivity.kt
+@@ -0,0 +1,476 @@
++package com.haishinkit.app.vqmetrix
++
++import android.Manifest
++import android.content.Context
++import android.content.Intent
++import android.content.pm.PackageManager
++import android.content.res.Configuration
++import android.graphics.Bitmap
++import android.graphics.Typeface
++import android.os.Build
++import android.os.Bundle
++import android.text.InputType
++import android.view.View
++import android.view.WindowManager
++import android.widget.AdapterView
++import android.widget.ArrayAdapter
++import android.widget.Button
++import android.widget.EditText
++import android.widget.ImageView
++import android.widget.LinearLayout
++import android.widget.ProgressBar
++import android.widget.ScrollView
++import android.widget.Spinner
++import android.widget.TextView
++import androidx.appcompat.app.AlertDialog
++import androidx.appcompat.app.AppCompatActivity
++import androidx.core.content.ContextCompat
++import androidx.core.content.FileProvider
++import androidx.core.view.ViewCompat
++import androidx.core.view.WindowInsetsCompat
++import androidx.lifecycle.lifecycleScope
++import com.haishinkit.vqmetrix.BatchArchive
++import com.haishinkit.vqmetrix.BatchConfig
++import com.haishinkit.vqmetrix.BatchPipeline
++import com.haishinkit.vqmetrix.BatchProgress
++import com.haishinkit.vqmetrix.BatchUploader
++import com.haishinkit.vqmetrix.ReceiverDiscovery
++import com.haishinkit.vqmetrix.ReceiverEndpoint
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.Job
++import kotlinx.coroutines.launch
++import org.json.JSONObject
++import java.io.File
++import java.util.Locale
++
++class VQMetrixActivity : AppCompatActivity() {
++    private lateinit var source: Spinner
++    private lateinit var resolution: Spinner
++    private lateinit var fps: Spinner
++    private lateinit var codec: Spinner
++    private lateinit var duration: EditText
++    private lateinit var bitrates: EditText
++    private lateinit var server: EditText
++    private lateinit var token: EditText
++    private lateinit var saved: Spinner
++    private lateinit var generate: Button
++    private lateinit var discover: Button
++    private lateinit var receivers: Spinner
++    private var endpoints = emptyList<ReceiverEndpoint>()
++    private val discovery by lazy { ReceiverDiscovery(this) }
++    private var discoveryPermissionPending = false
++    private lateinit var upload: Button
++    private lateinit var share: Button
++    private lateinit var language: Button
++    private lateinit var cancel: Button
++    private lateinit var status: TextView
++    private lateinit var progress: ProgressBar
++    private lateinit var preview: ImageView
++    private val uploader = BatchUploader()
++    private var job: Job? = null
++    private var permissionPending: BatchConfig? = null
++    private var archives = emptyList<BatchArchive>()
++    private var selected: BatchArchive? = null
++    private var busy = false
++    private var networkPermissionPending = false
++
++    override fun attachBaseContext(base: Context) {
++        val tag = base.getSharedPreferences("vqmetrix-ui", MODE_PRIVATE).getString("language", "").orEmpty()
++        val localized =
++            if (tag.isEmpty()) {
++                base
++            } else {
++                base.createConfigurationContext(
++                    Configuration(base.resources.configuration).apply { setLocale(Locale.forLanguageTag(tag)) },
++                )
++            }
++        super.attachBaseContext(localized)
++    }
++
++    override fun onCreate(savedInstanceState: Bundle?) {
++        super.onCreate(savedInstanceState)
++        val scroll = ScrollView(this)
++        val content =
++            LinearLayout(this).apply {
++                orientation = LinearLayout.VERTICAL
++                setPadding(dp(20), dp(16), dp(20), dp(24))
++            }
++        scroll.addView(content)
++        ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
++            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
++            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
++            insets
++        }
++
++        fun label(
++            id: Int,
++            heading: Boolean = false,
++        ) = TextView(this).apply {
++            text = getString(id)
++            textSize = if (heading) 20f else 14f
++            if (heading) setTypeface(null, Typeface.BOLD)
++            setPadding(0, dp(14), 0, dp(6))
++            content.addView(this)
++        }
++
++        fun spinner(items: List<String>) =
++            Spinner(this).apply {
++                adapter = ArrayAdapter(this@VQMetrixActivity, android.R.layout.simple_spinner_dropdown_item, items)
++                content.addView(this, LinearLayout.LayoutParams(-1, dp(50)))
++            }
++
++        fun field(
++            value: String,
++            type: Int = InputType.TYPE_CLASS_TEXT,
++        ) = EditText(this).apply {
++            setText(value)
++            inputType = type
++            isSingleLine = true
++            content.addView(this)
++        }
++
++        fun button(
++            id: Int,
++            action: () -> Unit,
++        ) = Button(this).apply {
++            text = getString(id)
++            setOnClickListener { action() }
++            content.addView(this)
++        }
++        label(R.string.vq_app_name, true).textSize = 30f
++        label(R.string.vq_subtitle)
++        language = button(R.string.vq_language, ::chooseLanguage)
++        label(R.string.vq_source)
++        source = spinner(listOf(getString(R.string.vq_pattern)))
++        label(R.string.vq_resolution)
++        resolution = spinner(listOf(getString(R.string.vq_sd), getString(R.string.vq_hd)))
++        label(R.string.vq_fps)
++        fps = spinner(listOf("15 fps", "30 fps")).apply { setSelection(1) }
++        label(R.string.vq_duration)
++        duration = field("3", InputType.TYPE_CLASS_NUMBER)
++        label(R.string.vq_codec)
++        codec = spinner(listOf("H.264", "HEVC"))
++        label(R.string.vq_bitrates)
++        bitrates = field("0.5, 1, 2")
++        generate = button(R.string.vq_generate, ::createBatch)
++        cancel =
++            button(R.string.vq_cancel) {
++                uploader.cancel()
++                job?.cancel()
++            }
++        label(R.string.vq_preview)
++        preview =
++            ImageView(this).apply {
++                scaleType = ImageView.ScaleType.FIT_CENTER
++                contentDescription = getString(R.string.vq_preview)
++                content.addView(this, LinearLayout.LayoutParams(-1, dp(160)))
++            }
++        progress =
++            ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
++                max = 100
++                content.addView(this)
++            }
++        status = label(R.string.vq_idle)
++        label(R.string.vq_runs, true)
++        saved = spinner(listOf(getString(R.string.vq_no_runs)))
++        saved.onItemSelectedListener =
++            object : AdapterView.OnItemSelectedListener {
++                override fun onItemSelected(
++                    parent: AdapterView<*>?,
++                    view: View?,
++                    position: Int,
++                    id: Long,
++                ) {
++                    selected = archives.getOrNull(position)
++                    updateEnabled()
++                }
++
++                override fun onNothingSelected(parent: AdapterView<*>?) {}
++            }
++        share = button(R.string.vq_share, ::shareBatch)
++        label(R.string.vq_receiver, true)
++        server = field(getPreferences(MODE_PRIVATE).getString("receiver", "").orEmpty(), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
++        server.hint = getString(R.string.vq_server)
++        receivers = spinner(listOf(getString(R.string.vq_searching)))
++        receivers.onItemSelectedListener =
++            object : AdapterView.OnItemSelectedListener {
++                override fun onItemSelected(
++                    parent: AdapterView<*>?,
++                    view: View?,
++                    position: Int,
++                    id: Long,
++                ) {
++                    endpoints.getOrNull(position - 1)?.let { server.setText(it.baseUrl) }
++                }
++
++                override fun onNothingSelected(parent: AdapterView<*>?) {}
++            }
++        discover = button(R.string.vq_find_receivers, ::findReceivers)
++        token = field("", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD).apply { hint = getString(R.string.vq_token) }
++        upload = button(R.string.vq_upload, ::uploadBatch)
++        label(R.string.vq_receiver_note)
++        label(R.string.vq_note)
++        setContentView(scroll)
++        refreshArchives()
++        updateEnabled()
++    }
++
++    override fun onStart() {
++        super.onStart()
++        if (Build.VERSION.SDK_INT < 37 || ContextCompat.checkSelfPermission(this, "android.permission.ACCESS_LOCAL_NETWORK") == PackageManager.PERMISSION_GRANTED) {
++            findReceivers()
++        }
++    }
++
++    override fun onStop() {
++        discovery.stop()
++        super.onStop()
++        uploader.cancel()
++        job?.cancel()
++        getSharedPreferences("vqmetrix-capture", MODE_PRIVATE).edit()
++            .putInt("seconds", duration.text.toString().toIntOrNull()?.coerceIn(1, 10) ?: 3)
++            .putString("bitrates", bitrates.text.toString())
++            .putString("codec", if (codec.selectedItemPosition == 0) "h264" else "hevc").apply()
++        if (::server.isInitialized) getPreferences(MODE_PRIVATE).edit().putString("receiver", server.text.toString()).apply()
++    }
++
++    override fun onRequestPermissionsResult(
++        requestCode: Int,
++        permissions: Array<out String>,
++        grantResults: IntArray,
++    ) {
++        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
++        if (requestCode == DISCOVERY_REQUEST) {
++            discoveryPermissionPending = false
++            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
++                findReceivers()
++            } else {
++                status.text = getString(R.string.vq_network_permission)
++            }
++            updateEnabled()
++            return
++        }
++        if (requestCode == NETWORK_REQUEST) {
++            networkPermissionPending = false
++            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
++                uploadBatch()
++            } else {
++                status.text = getString(R.string.vq_network_permission)
++            }
++            updateEnabled()
++            return
++        }
++        if (requestCode != CAMERA_REQUEST) return
++        val config = permissionPending
++        permissionPending = null
++        if (config != null && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
++            startBatch(config)
++        } else {
++            status.text = getString(R.string.vq_permission)
++        }
++        updateEnabled()
++    }
++
++    private fun findReceivers() {
++        if (Build.VERSION.SDK_INT >= 37 && ContextCompat.checkSelfPermission(this, "android.permission.ACCESS_LOCAL_NETWORK") != PackageManager.PERMISSION_GRANTED) {
++            discoveryPermissionPending = true
++            updateEnabled()
++            requestPermissions(arrayOf("android.permission.ACCESS_LOCAL_NETWORK"), DISCOVERY_REQUEST)
++            return
++        }
++        discovery.start({ found ->
++            val selectedUrl = server.text.toString()
++            endpoints = found
++            val labels = listOf(getString(if (found.isEmpty()) R.string.vq_searching else R.string.vq_select_receiver)) + found.map { "${it.name} · ${it.baseUrl}" }
++            receivers.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
++            receivers.setSelection(found.indexOfFirst { it.baseUrl == selectedUrl } + 1)
++        }, { code -> status.text = getString(R.string.vq_discovery_error, code) })
++    }
++
++    private fun createBatch() {
++        val config =
++            try {
++                val camera = source.selectedItemPosition == 1
++                val hd = resolution.selectedItemPosition == 1
++                BatchConfig(
++                    if (hd) 1280 else 640,
++                    if (hd) {
++                        720
++                    } else if (camera) {
++                        480
++                    } else {
++                        360
++                    },
++                    if (fps.selectedItemPosition == 0) 15 else 30,
++                    duration.text.toString().toInt(),
++                    BatchConfig.parseBitrates(bitrates.text.toString()),
++                    if (codec.selectedItemPosition == 0) "h264" else "hevc",
++                    camera,
++                )
++            } catch (_: Exception) {
++                status.text = getString(R.string.vq_invalid)
++                return
++            }
++        if (config.camera && ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
++            permissionPending = config
++            updateEnabled()
++            requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_REQUEST)
++        } else {
++            startBatch(config)
++        }
++    }
++
++    private fun startBatch(config: BatchConfig) {
++        setBusy(true)
++        job =
++            lifecycleScope.launch {
++                try {
++                    val result = BatchPipeline(this@VQMetrixActivity).create(config, { updateProgress(it) }, { updatePreview(it) })
++                    selected = result
++                    refreshArchives()
++                    status.text = getString(R.string.vq_ready, result.archive.length() / 1_048_576.0, result.runId.take(8))
++                } catch (
++                    _: CancellationException,
++                ) {
++                    status.text = getString(R.string.vq_cancelled)
++                } catch (
++                    failure: Exception,
++                ) {
++                    status.text = getString(R.string.vq_error, failure.message ?: failure.javaClass.simpleName)
++                } finally {
++                    setBusy(false)
++                    job = null
++                }
++            }
++    }
++
++    private fun uploadBatch() {
++        val batch = selected ?: return
++        val address = server.text.toString()
++        val credential = token.text.toString()
++        try {
++            BatchUploader.endpoint(address)
++            require(credential.isNotBlank())
++        } catch (
++            failure: Exception,
++        ) {
++            status.text = getString(R.string.vq_error, failure.message)
++            return
++        }
++        if (Build.VERSION.SDK_INT >= 37 && ContextCompat.checkSelfPermission(this, "android.permission.ACCESS_LOCAL_NETWORK") != PackageManager.PERMISSION_GRANTED) {
++            networkPermissionPending = true
++            updateEnabled()
++            requestPermissions(arrayOf("android.permission.ACCESS_LOCAL_NETWORK"), NETWORK_REQUEST)
++            return
++        }
++        setBusy(true)
++        job =
++            lifecycleScope.launch {
++                try {
++                    val id =
++                        uploader.upload(batch, address, credential) { sent, total ->
++                            runOnUiThread {
++                                progress.progress = (sent * 100 / maxOf(1, total)).toInt()
++                                status.text = getString(R.string.vq_upload_progress, progress.progress)
++                            }
++                        }
++                    status.text = getString(R.string.vq_uploaded, id)
++                } catch (
++                    _: CancellationException,
++                ) {
++                    status.text = getString(R.string.vq_cancelled)
++                } catch (
++                    failure: Exception,
++                ) {
++                    status.text = getString(R.string.vq_error, failure.message ?: failure.javaClass.simpleName)
++                } finally {
++                    setBusy(false)
++                    job = null
++                }
++            }
++    }
++
++    private fun shareBatch() {
++        val batch = selected ?: return
++        val uri = FileProvider.getUriForFile(this, "$packageName.vqmetrix.files", batch.archive)
++        startActivity(
++            Intent.createChooser(
++                Intent(Intent.ACTION_SEND).apply {
++                    type = "application/zip"
++                    putExtra(Intent.EXTRA_STREAM, uri)
++                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
++                },
++                getString(R.string.vq_share),
++            ),
++        )
++    }
++
++    private fun refreshArchives() {
++        archives =
++            File(filesDir, "runs").listFiles().orEmpty().filter { File(it, "batch.zip").isFile }
++                .sortedByDescending { it.lastModified() }.map { BatchArchive(it.name, it, File(it, "batch.zip")) }
++        val labels =
++            archives.map { batch ->
++                val manifest = runCatching { JSONObject(File(batch.directory, "manifest.json").readText()) }.getOrNull()
++                "${batch.runId.take(
++                    8,
++                )} · ${manifest?.optString("createdAt").orEmpty()} · ${"%.1f".format(batch.archive.length() / 1_048_576.0)} MB"
++            }.ifEmpty { listOf(getString(R.string.vq_no_runs)) }
++        saved.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
++        val index = archives.indexOfFirst { it.runId == selected?.runId }.coerceAtLeast(0)
++        saved.setSelection(index)
++        selected = archives.getOrNull(index)
++        updateEnabled()
++    }
++
++    private fun updateProgress(value: BatchProgress) =
++        runOnUiThread {
++            progress.progress = value.current * 100 / maxOf(1, value.total)
++            status.text =
++                when (value.stage) {
++                    "reference" -> getString(R.string.vq_reference_progress, value.current, value.total)
++                    "encoding" -> getString(R.string.vq_encoding_progress, value.detail, value.current, value.total)
++                    else -> getString(R.string.vq_packaging)
++                }
++        }
++
++    private fun updatePreview(bitmap: Bitmap) = runOnUiThread { if (!isDestroyed) preview.setImageBitmap(bitmap) }
++
++    private fun setBusy(value: Boolean) {
++        busy = value
++        if (value) {
++            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
++            progress.progress = 0
++        } else {
++            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
++        }
++        updateEnabled()
++    }
++
++    private fun updateEnabled() {
++        if (!::upload.isInitialized) return
++        val available = !busy && permissionPending == null && !networkPermissionPending && !discoveryPermissionPending
++        listOf<View>(source, resolution, fps, codec, duration, bitrates, generate, language, server, token, saved, discover, receivers).forEach {
++            it.isEnabled = available
++        }
++        share.isEnabled = available && selected != null
++        upload.isEnabled = available && selected != null
++        cancel.isEnabled = busy
++    }
++
++    private fun chooseLanguage() {
++        AlertDialog.Builder(this).setTitle(R.string.vq_language)
++            .setItems(arrayOf(getString(R.string.vq_system), "English", "日本語")) { _, index ->
++                getSharedPreferences("vqmetrix-ui", MODE_PRIVATE).edit().putString("language", arrayOf("", "en", "ja")[index]).apply()
++                recreate()
++            }.show()
++    }
++
++    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
++
++    companion object {
++        private const val CAMERA_REQUEST = 401
++        private const val NETWORK_REQUEST = 402
++        private const val DISCOVERY_REQUEST = 403
++    }
++}
+diff --git a/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/VQMetrixFileProvider.kt b/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/VQMetrixFileProvider.kt
+new file mode 100644
+index 00000000..b430c488
+--- /dev/null
++++ b/app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/VQMetrixFileProvider.kt
+@@ -0,0 +1,6 @@
++package com.haishinkit.app.vqmetrix
++
++import androidx.core.content.FileProvider
++
++/** Keeps the producer's shared files separate from the host application's provider. */
++class VQMetrixFileProvider : FileProvider()
+diff --git a/app/vqmetrix/src/main/res/values-ja/strings.xml b/app/vqmetrix/src/main/res/values-ja/strings.xml
+new file mode 100644
+index 00000000..d07b4b0e
+--- /dev/null
++++ b/app/vqmetrix/src/main/res/values-ja/strings.xml
+@@ -0,0 +1,47 @@
++<resources>
++    <string name="vq_app_name">VQMetrix</string>
++    <string name="vq_subtitle">Macで評価するための参照映像と、ビットレート別の映像を作成します。</string>
++    <string name="vq_source">参照映像の入力</string>
++    <string name="vq_pattern">テストパターン</string>
++    <string name="vq_camera">カメラ</string>
++    <string name="vq_resolution">解像度</string>
++    <string name="vq_sd">SD · 640×360（カメラは最大640×480）</string>
++    <string name="vq_hd">HD · 最大1280×720</string>
++    <string name="vq_fps">フレームレート</string>
++    <string name="vq_duration">動画長の目安（1〜10秒）</string>
++    <string name="vq_codec">コーデック</string>
++    <string name="vq_bitrates">ビットレート（Mbps、カンマ区切り、最大6件）</string>
++    <string name="vq_generate">参照映像と条件別映像を作成</string>
++    <string name="vq_cancel">キャンセル</string>
++    <string name="vq_idle">入力元とエンコード条件を選択してください。</string>
++    <string name="vq_reference_progress">参照映像: %1$d / %2$d フレーム</string>
++    <string name="vq_encoding_progress">%1$s をエンコード: %2$d / %3$d フレーム</string>
++    <string name="vq_packaging">アップロード用データを作成しています…</string>
++    <string name="vq_ready">作成済み · %1$.1f MB · %2$s</string>
++    <string name="vq_cancelled">キャンセルしました。作成済みのデータは端末に残ります。</string>
++    <string name="vq_error">処理を完了できませんでした: %1$s</string>
++    <string name="vq_preview">参照映像のプレビュー（輝度）</string>
++    <string name="vq_runs">保存したデータ</string>
++    <string name="vq_no_runs">作成済みのデータはありません</string>
++    <string name="vq_receiver">macOSの受信サービス</string>
++    <string name="vq_server">接続先URL（例：http://MacName.local:8787）</string>
++    <string name="vq_token">受信サービスのトークン（保存しません）</string>
++    <string name="vq_upload">選択したデータをアップロード</string>
++    <string name="vq_upload_progress">アップロード中: %1$d%%</string>
++    <string name="vq_uploaded">受信サービスがジョブ %1$s を受け付けました</string>
++    <string name="vq_share">データを共有…</string>
++    <string name="vq_language">言語</string>
++    <string name="vq_system">システム設定</string>
++    <string name="vq_permission">カメラの参照映像を作るにはカメラの利用許可が必要です。音声は取得しません。</string>
++    <string name="vq_note">撮影・アップロード中はこの画面を開いておいてください。参照映像は非圧縮YUVのため保存容量を使用します。VMAFの評価はMacで行います。</string>
++    <string name="vq_invalid">動画長・ビットレート一覧・エンコード設定を確認してください。</string>
++    <string name="vq_receiver_note">HTTPはLAN内限定です。HTTPでは映像とトークンは暗号化されません。HTTPSには信頼された証明書が必要です。</string>
++    <string name="vq_network_permission">LAN内の受信サービスへアップロードするには、ローカルネットワークの利用許可が必要です。</string>
++    <string name="vq_find_receivers">同じネットワークのMacを探す</string>
++    <string name="vq_searching">VQMetrixの受信先を検索中…</string>
++    <string name="vq_select_receiver">Macを選択してください</string>
++    <string name="vq_discovery_error">ローカルネットワークを検索できませんでした（%1$d）。接続先を直接入力することもできます。</string>
++    <string name="vq_capture_busy">VQMetrixの素材を保存中です。</string>
++    <string name="vq_capture_started">合成映像を保存しています。取得が完了するまで入力を動かしたままにしてください。</string>
++    <string name="vq_capture_saved">%1$s を保存しました。設定のVQMetrixから共有・送信できます。</string>
++</resources>
+diff --git a/app/vqmetrix/src/main/res/values/strings.xml b/app/vqmetrix/src/main/res/values/strings.xml
+new file mode 100644
+index 00000000..478de6d3
+--- /dev/null
++++ b/app/vqmetrix/src/main/res/values/strings.xml
+@@ -0,0 +1,47 @@
++<resources>
++    <string name="vq_app_name">VQMetrix</string>
++    <string name="vq_subtitle">Create reference video and bitrate variants for evaluation on your Mac.</string>
++    <string name="vq_source">Reference source</string>
++    <string name="vq_pattern">Test pattern</string>
++    <string name="vq_camera">Camera</string>
++    <string name="vq_resolution">Resolution</string>
++    <string name="vq_sd">SD · 640×360 (camera up to 640×480)</string>
++    <string name="vq_hd">HD · up to 1280×720</string>
++    <string name="vq_fps">Frame rate</string>
++    <string name="vq_duration">Nominal duration (1–10 seconds)</string>
++    <string name="vq_codec">Codec</string>
++    <string name="vq_bitrates">Bitrates in Mbps, separated by commas (up to 6)</string>
++    <string name="vq_generate">Create reference + variants</string>
++    <string name="vq_cancel">Cancel</string>
++    <string name="vq_idle">Choose the source and encoding conditions.</string>
++    <string name="vq_reference_progress">Reference: %1$d / %2$d frames</string>
++    <string name="vq_encoding_progress">Encoding %1$s: %2$d / %3$d frames</string>
++    <string name="vq_packaging">Creating upload package…</string>
++    <string name="vq_ready">Ready · %1$.1f MB · %2$s</string>
++    <string name="vq_cancelled">Cancelled. Completed packages remain on this device.</string>
++    <string name="vq_error">Could not complete: %1$s</string>
++    <string name="vq_preview">Reference preview (luma)</string>
++    <string name="vq_runs">Saved packages</string>
++    <string name="vq_no_runs">No completed packages yet</string>
++    <string name="vq_receiver">macOS receiver</string>
++    <string name="vq_server">Receiver URL, for example http://MacName.local:8787</string>
++    <string name="vq_token">Receiver token (not saved)</string>
++    <string name="vq_upload">Upload selected package</string>
++    <string name="vq_upload_progress">Uploading: %1$d%%</string>
++    <string name="vq_uploaded">Receiver accepted job %1$s</string>
++    <string name="vq_share">Share package…</string>
++    <string name="vq_language">Language</string>
++    <string name="vq_system">System</string>
++    <string name="vq_permission">Camera permission is needed to create a camera reference. Audio is not captured.</string>
++    <string name="vq_note">Keep this screen open during capture or upload. References are uncompressed YUV and can use substantial storage. VMAF evaluation runs on the Mac.</string>
++    <string name="vq_invalid">Check the duration, bitrate list, and encoding settings.</string>
++    <string name="vq_receiver_note">HTTP is available only on the local network. Video and tokens are unencrypted over HTTP. HTTPS requires a trusted certificate.</string>
++    <string name="vq_network_permission">Local network permission is needed to upload to a receiver on your LAN.</string>
++    <string name="vq_find_receivers">Find Macs on this network</string>
++    <string name="vq_searching">Searching for VQMetrix receivers…</string>
++    <string name="vq_select_receiver">Select a Mac</string>
++    <string name="vq_discovery_error">Could not search the local network (%1$d). You can enter the address manually.</string>
++    <string name="vq_capture_busy">A VQMetrix sample is already being saved.</string>
++    <string name="vq_capture_started">Saving the mixer output. Keep this source running until capture finishes.</string>
++    <string name="vq_capture_saved">Saved %1$s. Open VQMetrix in Preferences to share or upload.</string>
++</resources>
+diff --git a/app/vqmetrix/src/main/res/values/styles.xml b/app/vqmetrix/src/main/res/values/styles.xml
+new file mode 100644
+index 00000000..8fbd6b24
+--- /dev/null
++++ b/app/vqmetrix/src/main/res/values/styles.xml
+@@ -0,0 +1,3 @@
++<resources><style name="VQMetrixTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
++    <item name="colorAccent">#00A6E8</item><item name="android:fontFamily">sans</item>
++</style></resources>
+diff --git a/app/vqmetrix/src/main/res/xml/vq_file_paths.xml b/app/vqmetrix/src/main/res/xml/vq_file_paths.xml
+new file mode 100644
+index 00000000..a3725f0c
+--- /dev/null
++++ b/app/vqmetrix/src/main/res/xml/vq_file_paths.xml
+@@ -0,0 +1 @@
++<paths xmlns:android="http://schemas.android.com/apk/res/android"><files-path name="runs" path="runs/" /></paths>

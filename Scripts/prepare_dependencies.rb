@@ -9,8 +9,8 @@ requested.each do |kind|
   name = kind == 'swift' ? 'HaishinKit.swift' : 'HaishinKit.kt'
   directory = File.expand_path("../#{name}", ROOT)
   abort "Missing #{directory}; check out #{versions.fetch(kind).fetch('repository')} at #{versions.fetch(kind).fetch('revision')}" unless File.directory?(directory)
-  marker = kind == 'swift' ? 'HaishinKit/Sources/Codec/VideoCodecProbe.swift' : 'haishinkit/src/main/java/com/haishinkit/codec/VideoCodec.kt'
-  ready = File.file?(File.join(directory, marker)) && (kind == 'swift' || File.read(File.join(directory, marker)).include?('var inputColorFormat:'))
+  marker = kind == 'swift' ? 'HaishinKit/Sources/Codec/VideoCodecProbe.swift' : 'app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/MixerCapture.kt'
+  ready = File.file?(File.join(directory, marker))
   next if ready
   head,status = Open3.capture2('git','rev-parse','HEAD', chdir: directory)
   abort "Wrong #{name} revision" unless status.success? && head.strip == versions.fetch(kind).fetch('revision')

@@ -38,9 +38,21 @@ class ReferenceTest {
             assertThrows(Exception::class.java) { BatchConfig.parseBitrates(input) }
         }
         assertEquals("https://example.com/vq/api/v1/runs", BatchUploader.endpoint("https://example.com/vq/").toString())
-        listOf("http://example.com", "https://user:pass@example.com", "https://example.com?token=x", "file:///tmp/a").forEach {
+        assertEquals("http://192.168.1.2:8787/api/v1/runs", BatchUploader.endpoint("http://192.168.1.2:8787").toString())
+        assertEquals("http://mac.local:8787/api/v1/runs", BatchUploader.endpoint("http://mac.local:8787").toString())
+        listOf("http://8.8.8.8", "http://example.com", "https://user:pass@example.com", "https://example.com?token=x", "file:///tmp/a").forEach {
             assertThrows(IllegalArgumentException::class.java) { BatchUploader.endpoint(it) }
         }
+    }
+
+    @Test
+    fun discoveryRequiresCompatibleProtocolAndLocalHttpHost() {
+        val txt = mapOf("protocol" to "1", "scheme" to "http", "host" to "studio.local")
+        assertEquals("http://studio.local:8787", ReceiverDiscovery.endpoint("Studio", 8787, txt)?.baseUrl)
+        assertNull(ReceiverDiscovery.endpoint("Studio", 8787, txt + ("protocol" to "2")))
+        assertNull(ReceiverDiscovery.endpoint("Studio", 8787, txt + ("host" to "example.com")))
+        assertNull(ReceiverDiscovery.endpoint("Studio", 8787, txt + ("host" to "user@studio.local")))
+        assertNull(ReceiverDiscovery.endpoint("Studio", 0, txt))
     }
 
     @Test

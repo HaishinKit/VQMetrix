@@ -1,44 +1,36 @@
-# 📱 VQMetrix Android
+# 📱 VQMetrix Android library
 
-[![Android](https://img.shields.io/badge/Android-API%2029%2B-3ddc84)](app/build.gradle.kts)
+[![Android](https://img.shields.io/badge/Android-API%2029%2B-3ddc84)](producer/build.gradle.kts)
 
-Creates reference/encoded material for evaluation on macOS. It does not run VMAF.
-The standalone app and HaishinKit Example use the same `producer` module.
+Reusable capture, encoding, packaging, upload and Bonjour discovery for evaluation
+on macOS. VMAF runs on the Mac. The Android screen lives in HaishinKit.kt Example;
+VQMetrix does not have a standalone Android application.
 
 ## 🚀 Build
 
 Check out HaishinKit.kt beside VQMetrix at the revision in `../Support/dependencies.json`.
-From the VQMetrix root, run `ruby Scripts/prepare_dependencies.rb android`. This supplies
-the development YUV input API, which is not assumed to exist in a published SDK tag.
-
-With JDK 17+ and Android SDK 37 installed:
+From the VQMetrix root, run `ruby Scripts/prepare_dependencies.rb android` to apply the
+Example integration, pending upstream inclusion.
+With JDK 17+ and Android SDK 37 installed, build from HaishinKit.kt:
 
 ```sh
 ./gradlew :app:assembleDebug
 ```
 
-Install `app/build/outputs/apk/debug/app-debug.apk`. Choose a camera or test pattern,
-H.264/HEVC, and comma-separated Mbps targets. Completed packages remain in private
-storage and can be shared or uploaded to a compatible trusted HTTPS receiver.
+Use Save sample on its camera or MediaProjection screen. The VQMetrix screen in Preferences also creates test patterns and lets you choose H.264/HEVC,
+and target bitrates. Select a Bonjour receiver or enter its address, then upload a
+saved package. HTTP is limited to the trusted LAN; HTTPS requires a trusted certificate.
+The Mac receiving service is the next integration.
 
-## 🧰 HaishinKit Example
-
-Build the HaishinKit.kt Example with VQMetrix beside it. Its Preference screen adds a
-VQMetrix button. Another checkout layout can use:
-
-```sh
-./gradlew :app:assembleDebug -PvqmetrixDir=/absolute/path/VQMetrix/Android/producer
-```
-
-The integration is optional when the VQMetrix checkout is absent. Both entry points use
-the same capture, encoding, packaging, and upload implementation.
+For another checkout layout, use `-PvqmetrixDir=/absolute/path/VQMetrix/Android/producer`.
+The Example feature is omitted when the VQMetrix checkout is absent.
 
 ## 📚 Documentation
 
-[User guide](../docs/user-guide.md) · [Package and HTTPS contract](../docs/transfer.md)
+[User guide](../docs/user-guide.md) · [Transfer and Bonjour protocol](../docs/transfer.md)
 
-Generate the Kotlin reference with `./gradlew :producer:dokkaGenerate`. Release tags
-build and attach the standalone development APK and generated references automatically.
+Generate Kotlin API documentation here with `./gradlew :producer:dokkaGenerate`.
+Tags attach the HaishinKit Example development APK and generated API references.
 
 ## 🧪 Tests
 
@@ -47,5 +39,4 @@ build and attach the standalone development APK and generated references automat
 ./gradlew :producer:connectedDebugAndroidTest
 ```
 
-The latter requires a connected device supporting H.264, HEVC, and camera capture.
-The initial integration was verified on Pixel 5a / Android 14.
+Device tests require H.264, HEVC and camera support; verified on Pixel 5a / Android 14.

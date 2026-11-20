@@ -22,14 +22,14 @@ An unreadable cache falls back to the original summary; unreadable runs are coun
 
 ## Android material creation
 
-The Android app does not run VMAF. It records an exact uncompressed I420 reference in
-Y4M format and replays the same frames to HaishinKit VideoCodec at each requested bitrate.
-Choose a deterministic test pattern or camera, SD/HD resolution, 15/30 fps, H.264/HEVC,
+The VQMetrix screen in HaishinKit.kt Example does not run VMAF. It records an exact uncompressed I420 reference in
+Y4M format and replays the same frames to Android MediaCodec at each requested bitrate.
+The VQMetrix screen creates a deterministic test pattern with SD/HD resolution, 15/30 fps, H.264/HEVC,
 and up to six comma-separated bitrates (0.05–20 Mbps). Capture length is 1–10 nominal
 seconds. Camera frame sizes are selected from the device's supported YUV sizes.
 
 Keep the screen open during capture, encoding, and upload. Leaving it cancels the
-current operation; completed packages remain available. Camera mode requests camera
+current operation; completed packages remain available. The library camera-capture API requests camera
 permission and captures no audio. The preview is luma-only; the stored reference retains
 all three YUV planes. Camera range/matrix that the capture API does not report are marked
 `unspecified`, not guessed. Sensor timestamps and orientation are recorded separately.
@@ -40,18 +40,20 @@ presentation timestamps. A mismatched or unsupported encoder fails the run. Targ
 bitrate and actual encoded payload bitrate are separate measurements. References may
 use hundreds of megabytes; free space is checked before starting.
 
-Saved packages can be shared as ZIP files or sent to a compatible HTTPS receiver with
+Saved packages can be shared as ZIP files or sent to a compatible LAN HTTP or HTTPS receiver with
 a bearer token. The app validates the receiver response and stores its job ID without
 the token. On systems requiring local-network permission, allow it for a LAN receiver.
-Tokens are not saved. The receiver needs a system-trusted HTTPS certificate; certificate
+Tokens are not saved. HTTP is restricted to local network addresses and .local names; video and tokens are unencrypted. HTTPS needs a system-trusted certificate; certificate
 validation is not bypassed. The upload contract is described in the transfer guide.
+
+The receiver picker browses Bonjour services automatically while this screen is visible. Choose a discovered Mac to fill its address. Manual entry remains available. The Mac receiver and its Bonjour advertisement are the next integration.
 
 ## HaishinKit Example integration
 
 Check out VQMetrix beside HaishinKit.kt, then build its Example. A VQMetrix button appears
 on Preference and opens the same material-creation activity. Set Gradle property
 `vqmetrixDir` to the `VQMetrix/Android/producer` directory for another layout. The integration
-is optional when that checkout is unavailable; the standalone app uses the same code.
+is optional when that checkout is unavailable. UI and file sharing live in HaishinKit.kt/app/vqmetrix; capture, encoding, packaging, upload and discovery live in VQMetrix/Android/producer.
 
 ## Interpreting results
 
@@ -70,11 +72,11 @@ streaming performance with evaluation disabled separately to quantify overhead.
 
 Check out the sibling dependencies at the immutable revisions in `Support/dependencies.json`,
 then run `ruby Scripts/prepare_dependencies.rb`. This applies the included development
-adapters only when needed: the external Swift codec probe and Android raw YUV input.
+adapters only when needed: the external Swift codec probe and Android Example integration.
 These APIs are not yet assumed to exist in a published HaishinKit release.
 
 macOS: `brew install libvmaf pkgconf`, then `ruby Scripts/build_app.rb`.
-Android: `cd Android && ./gradlew :app:assembleDebug` with JDK 17+ and SDK 37.
+Android: `cd ../HaishinKit.kt && ./gradlew :app:assembleDebug` with JDK 17+ and SDK 37.
 
 Tags such as `v0.1.0` trigger app builds and documentation generation. macOS ZIP, Android
 development APK, and offline API documentation are attached to GitHub Release. The
@@ -82,3 +84,9 @@ macOS app is ad hoc signed and not notarized. Android uses debug signing; a stab
 release signing key is required before offering an upgradeable production channel.
 GitHub Pages deployment is optional via repository variable `PUBLISH_PAGES=true` after
 Pages is configured for GitHub Actions. No release tag is created by these instructions.
+
+## Save from an existing Android source
+
+In HaishinKit Example, use **VQMetrix · Save sample** on the camera or MediaProjection screen. It samples that existing mixer composition, including overlays, without opening a second camera or projection. Defaults are 3 seconds, 15 fps, within 640×480 while preserving aspect ratio; duration, codec and bitrates come from the VQMetrix screen after leaving it. Sampling is bounded and source shutdown cancels an unfinished capture; encoding and packaging can finish after capture completes. Open VQMetrix from Preferences to share or upload saved packages.
+
+These are sampled post-composition frames replayed with a CFR timeline, not the original live bitstream. Observed readback times are preserved. The comparison measures re-encoding of the stored reference; it does not include network effects. Android MediaCodec handles raw replay without changes to HaishinKit library code.

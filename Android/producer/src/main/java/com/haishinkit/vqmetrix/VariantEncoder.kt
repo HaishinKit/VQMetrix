@@ -3,18 +3,15 @@ package com.haishinkit.vqmetrix
 import android.content.Context
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.MediaMuxer
-import com.haishinkit.codec.Codec
-import com.haishinkit.codec.CodecOption
-import com.haishinkit.codec.VideoCodec
-import com.haishinkit.codec.VideoCodecProfileLevel
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.File
-import java.nio.ByteBuffer
 
 data class EncodedVariant(
     val file: File,
@@ -26,7 +23,9 @@ data class EncodedVariant(
     val encodedBytes: Long,
 )
 
-class VariantEncoder(private val context: Context) {
+class VariantEncoder(
+    @Suppress("UNUSED_PARAMETER") context: Context,
+) {
     suspend fun encode(
         reference: File,
         captured: CapturedReference,
@@ -37,122 +36,92 @@ class VariantEncoder(private val context: Context) {
     ): EncodedVariant =
         withContext(Dispatchers.IO) {
             val spec = captured.spec
-            var reader: Y4mReader? = null
-            val owner = VideoCodec(context)
-            val muxer = MediaMuxer(target.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            val completion = CompletableDeferred<Unit>()
-            val outputPts = ArrayList<Long>()
-            var inputIndex = 0
-            var eos = false
-            var track = -1
-            var started = false
-            var bytes = 0L
-            owner.inputColorFormat = MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
-            owner.width = spec.width
-            owner.height = spec.height
-            owner.frameRate = spec.fps
-            owner.bitRate = bitrate
-            owner.IFrameInterval = 2
-            owner.profileLevel = if (format == "hevc") VideoCodecProfileLevel.HEVC_MAIN_4 else VideoCodecProfileLevel.H264_BASELINE_4_0
-            owner.outputMimeType = owner.profileLevel.mime
-            owner.options =
-                buildList {
-                    add(CodecOption(MediaFormat.KEY_MAX_B_FRAMES, 0))
-                    if (captured.range == "limited") add(CodecOption(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED))
-                    if (captured.matrix == "bt709") add(CodecOption(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709))
-                    add(CodecOption(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO))
+            val mime = if (format == "hevc") MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
+            val mediaFormat =
+                MediaFormat.createVideoFormat(mime, spec.width, spec.height).apply {
+                    setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
+                    setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
+                    setInteger(MediaFormat.KEY_FRAME_RATE, spec.fps)
+                    setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
+                    setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
+                    setInteger(MediaFormat.KEY_PROFILE, if (format == "hevc") MediaCodecInfo.CodecProfileLevel.HEVCProfileMain else MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
+                    if (captured.range == "limited") setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
+                    if (captured.matrix == "bt709") setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709)
+                    setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
                 }
-            var codecName = ""
-            var hardware = false
-            owner.listener =
-                object : Codec.Listener {
-                    override fun onInputBufferAvailable(
-                        mime: String,
-                        codec: MediaCodec,
-                        index: Int,
-                    ) {
-                        if (eos || completion.isCompleted) return
-                        try {
-                            val data = checkNotNull(reader).next()
-                            owner.withCurrentCodec(codec) {
-                                if (data == null) {
-                                    eos = true
-                                    codec.queueInputBuffer(index, 0, 0, pts(spec.frames, spec.fps), MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                                } else {
-                                    val image = checkNotNull(codec.getInputImage(index)) { "Encoder does not support YUV input images" }
-                                    YuvImages.write(image, data, spec)
-                                    codec.queueInputBuffer(index, 0, data.size, pts(inputIndex, spec.fps), 0)
-                                    inputIndex++
+            val name = checkNotNull(MediaCodecList(MediaCodecList.REGULAR_CODECS).findEncoderForFormat(mediaFormat)) { "No compatible $format YUV encoder" }
+            val native = MediaCodec.createByCodecName(name)
+            var muxer: MediaMuxer? = null
+            var started = false
+            var running = false
+            val outputPts = ArrayList<Long>()
+            var bytes = 0L
+            try {
+                val output = MediaMuxer(target.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+                muxer = output
+                native.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                native.start()
+                running = true
+                var track = -1
+                var inputIndex = 0
+                var inputEnded = false
+                var outputEnded = false
+                val info = MediaCodec.BufferInfo()
+                Y4mReader(reference, spec).use { reader ->
+                    withTimeout(90_000) {
+                        while (!outputEnded) {
+                            currentCoroutineContext().ensureActive()
+                            if (!inputEnded) {
+                                val index = native.dequeueInputBuffer(10_000)
+                                if (index >= 0) {
+                                    val data = reader.next()
+                                    if (data == null) {
+                                        native.queueInputBuffer(index, 0, 0, pts(spec.frames, spec.fps), MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                        inputEnded = true
+                                    } else {
+                                        val image = checkNotNull(native.getInputImage(index)) { "Encoder does not support YUV input images" }
+                                        YuvImages.write(image, data, spec)
+                                        native.queueInputBuffer(index, 0, data.size, pts(inputIndex++, spec.fps), 0)
+                                    }
                                 }
                             }
-                        } catch (failure: Throwable) {
-                            completion.completeExceptionally(failure)
-                        }
-                    }
-
-                    override fun onFormatChanged(
-                        mime: String,
-                        mediaFormat: MediaFormat,
-                    ) {
-                        try {
-                            check(!started) { "Unexpected encoder format change" }
-                            track = muxer.addTrack(mediaFormat)
-                            muxer.start()
-                            started = true
-                        } catch (failure: Throwable) {
-                            completion.completeExceptionally(failure)
-                        }
-                    }
-
-                    override fun onSampleOutput(
-                        mime: String,
-                        index: Int,
-                        info: MediaCodec.BufferInfo,
-                        buffer: ByteBuffer,
-                    ): Boolean {
-                        try {
-                            if (info.size > 0 && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) {
-                                check(started)
-                                muxer.writeSampleData(track, buffer, info)
-                                outputPts.add(info.presentationTimeUs)
-                                bytes += info.size
-                                progress(outputPts.size)
+                            when (val index = native.dequeueOutputBuffer(info, 10_000)) {
+                                MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                                    check(!started) { "Unexpected encoder format change" }
+                                    track = output.addTrack(native.outputFormat)
+                                    output.start()
+                                    started = true
+                                }
+                                in 0..Int.MAX_VALUE -> {
+                                    try {
+                                        if (info.size > 0 && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) {
+                                            check(started)
+                                            output.writeSampleData(track, checkNotNull(native.getOutputBuffer(index)), info)
+                                            outputPts.add(info.presentationTimeUs)
+                                            bytes += info.size
+                                            progress(outputPts.size)
+                                        }
+                                        outputEnded = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
+                                    } finally {
+                                        native.releaseOutputBuffer(index, false)
+                                    }
+                                }
                             }
-                            if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) completion.complete(Unit)
-                        } catch (failure: Throwable) {
-                            completion.completeExceptionally(failure)
                         }
-                        return true
-                    }
-
-                    override fun onError(
-                        mime: String,
-                        cause: MediaCodec.CodecException,
-                    ) {
-                        completion.completeExceptionally(cause)
                     }
                 }
-            try {
-                reader = Y4mReader(reference, spec)
-                val native = checkNotNull(owner.codec)
-                codecName = native.name
-                hardware = native.codecInfo.isHardwareAccelerated
-                owner.startRunning()
-                check(owner.isRunning.get()) { "Could not start $format encoder" }
-                withTimeout(90_000) { completion.await() }
-                owner.stopRunning()
                 check(outputPts.size == spec.frames) { "Encoder produced ${outputPts.size}/${spec.frames} frames" }
                 check(outputPts == (0 until spec.frames).map { pts(it, spec.fps) }) { "Encoder timestamps differ from the reference" }
-                muxer.stop()
+                output.stop()
                 started = false
-                EncodedVariant(target, bitrate, format, codecName, hardware, outputPts.toList(), bytes)
+                EncodedVariant(target, bitrate, format, name, native.codecInfo.isHardwareAccelerated, outputPts.toList(), bytes)
             } finally {
-                runCatching { owner.dispose() }
-                reader?.close()
+                if (running) runCatching { native.stop() }
+                native.release()
                 try {
-                    if (started) runCatching { muxer.stop() }
+                    if (started) runCatching { muxer?.stop() }
                 } finally {
-                    muxer.release()
+                    muxer?.release()
                 }
             }
         }

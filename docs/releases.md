@@ -6,13 +6,13 @@ This setup does not create tags, change repository visibility, or publish SDK re
 
 Each build checks out the exact HaishinKit revisions in `Support/dependencies.json` and
 applies only the included development adapters. Update the revisions and patches together
-when the upstream APIs change. The Example integration is also supplied with the Android
+when the upstream APIs change. Until merged upstream, the Example screen and integration are supplied with the Android
 adapter; no RTC or unrelated local changes are included.
 
 The workflow builds:
 
 - A native macOS app with bundled libvmaf, model, localization resources, and licenses.
-- An Android development APK with the reusable producer module.
+- The HaishinKit.kt Example APK, with its VQMetrix screen and the reusable producer module.
 - Swift DocC and Kotlin Dokka, combined with guides into `api-documentation.tar.gz`.
 
 On tags, the apps, reference archive, and SHA256SUMS.txt are attached to GitHub Release.

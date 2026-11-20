@@ -5,7 +5,7 @@ evaluation queue remain to be implemented; the desktop app does not yet expose t
 
 ## Upload
 
-`POST /api/v1/runs` over HTTPS. The app accepts a base URL and appends this path.
+`POST /api/v1/runs` over LAN HTTP or HTTPS. The app accepts a base URL and appends this path.
 
 Headers:
 
@@ -77,3 +77,17 @@ frame count and timestamp correspondence before evaluating. Preserve the origina
 package and settings, record validation failures, and queue VMAF outside the upload
 request. Export results through the same history/report model as local runs. Future
 status polling can use `GET /api/v1/jobs/<jobId>`; it is not required by the current client.
+
+## Bonjour discovery
+
+A receiver advertises `_vqmetrix._tcp` on the local network, using its listening port.
+TXT records are `protocol=1`, `scheme=http` or `scheme=https`, and `host=MacName.local`.
+Do not publish tokens or credentials in TXT records. The Android NSD browser filters
+incompatible advertisements and fills the selected URL; it never starts an upload
+merely because a receiver appeared. Discovery does not establish receiver identity.
+
+HTTP accepts .local names and local IP literals only; resolved addresses must also be
+local (private, link-local or loopback, including IPv6 ULA). Redirects are disabled.
+HTTP transmits video and bearer tokens without encryption and is for trusted LAN
+use only. HTTPS uses the platform trust store and hostname verification.
+The macOS receiving service and Bonjour advertisement are not implemented yet.

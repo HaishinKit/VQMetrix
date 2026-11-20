@@ -7,8 +7,8 @@
 Video quality development tools built on HaishinKit.
 
 - **macOS:** compare reference and decoded video, change H.264/HEVC and bitrate, inspect VMAF, and review saved runs and HTML reports.
-- **Android:** create exact YUV references from a camera or test pattern, encode bitrate variants, and prepare checksummed upload packages.
-- **Transfer:** HTTPS upload client and a versioned package format. The macOS receiver/evaluation service is the next integration; it is not implemented yet.
+- **Android (HaishinKit Example):** create exact YUV references from a camera or test pattern, encode bitrate variants, and prepare checksummed upload packages.
+- **Transfer:** LAN HTTP / HTTPS upload client and Bonjour discovery and a versioned package format. The macOS receiver/evaluation service is the next integration; it is not implemented yet.
 
 ## 🚀 Build
 
@@ -30,7 +30,7 @@ open .build/VQMetrix.app
 Android (JDK 17+, SDK 37):
 
 ```sh
-cd Android
+cd ../HaishinKit.kt
 ./gradlew :app:assembleDebug
 ```
 
@@ -59,7 +59,7 @@ is experimental; capture availability depends on the device and environment.
 
 ## 📦 Development builds
 
-Tags such as `v0.1.0` attach a macOS ZIP, Android debug APK, API documentation, and
+Tags such as `v0.1.0` attach a macOS ZIP, HaishinKit Example debug APK, API documentation, and
 checksums to [GitHub Release](https://github.com/HaishinKit/VQMetrix/releases). macOS builds
 are ad hoc signed and not notarized. The Android APK uses development signing.
 

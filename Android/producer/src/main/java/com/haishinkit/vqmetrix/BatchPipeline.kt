@@ -26,6 +26,7 @@ class BatchPipeline(private val context: Context) {
         config: BatchConfig,
         progress: (BatchProgress) -> Unit,
         preview: (Bitmap) -> Unit,
+        screenReference: ScreenReference? = null,
     ): BatchArchive =
         withContext(Dispatchers.IO) {
             val spec = ReferenceSpec(config.width, config.height, config.fps, config.fps * config.seconds)
@@ -48,7 +49,9 @@ class BatchPipeline(private val context: Context) {
             }
             try {
                 val captured =
-                    if (config.camera) {
+                    if (screenReference != null) {
+                        screenReference.record(reference, config, ::onFrame)
+                    } else if (config.camera) {
                         CameraReference(context).record(reference, config, ::onFrame)
                     } else {
                         Y4mWriter(reference, spec).use { writer ->

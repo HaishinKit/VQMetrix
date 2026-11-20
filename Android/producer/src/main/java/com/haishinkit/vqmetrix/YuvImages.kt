@@ -6,6 +6,44 @@ import android.media.Image
 import java.nio.ByteBuffer
 
 object YuvImages {
+    /** Converts composited SDR RGB to limited-range BT.709 planar YUV420. */
+    fun fromBitmap(bitmap: Bitmap): ByteArray {
+        val width = bitmap.width
+        val height = bitmap.height
+        require(width % 2 == 0 && height % 2 == 0)
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        val output = ByteArray(width * height * 3 / 2)
+
+        fun channel(
+            pixel: Int,
+            shift: Int,
+        ) = (pixel shr shift) and 255
+        for (y in 0 until height) for (x in 0 until width) {
+            val pixel = pixels[y * width + x]
+            val r = channel(pixel, 16)
+            val g = channel(pixel, 8)
+            val b = channel(pixel, 0)
+            output[y * width + x] = (16 + (0.182586 * r + 0.614231 * g + 0.062007 * b).toInt()).coerceIn(16, 235).toByte()
+            if (x % 2 == 0 && y % 2 == 0) {
+                var cb = 0.0
+                var cr = 0.0
+                for (dy in 0..1) for (dx in 0..1) {
+                    val color = pixels[(y + dy) * width + x + dx]
+                    val red = channel(color, 16)
+                    val green = channel(color, 8)
+                    val blue = channel(color, 0)
+                    cb += -0.100644 * red - 0.338572 * green + 0.439216 * blue
+                    cr += 0.439216 * red - 0.398942 * green - 0.040274 * blue
+                }
+                val index = y / 2 * (width / 2) + x / 2
+                output[width * height + index] = (128 + (cb / 4).toInt()).coerceIn(16, 240).toByte()
+                output[width * height * 5 / 4 + index] = (128 + (cr / 4).toInt()).coerceIn(16, 240).toByte()
+            }
+        }
+        return output
+    }
+
     fun read(image: Image): ByteArray {
         require(image.format == ImageFormat.YUV_420_888)
         val crop = image.cropRect

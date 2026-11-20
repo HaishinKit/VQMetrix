@@ -4,5 +4,5 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "VQMetrixAndroid"
-include(":app", ":producer", ":haishinkit")
+include(":producer", ":haishinkit")
 project(":haishinkit").projectDir = file("../../HaishinKit.kt/haishinkit")
