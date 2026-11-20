@@ -2,6 +2,7 @@
 require 'fileutils'
 require 'json'
 require 'open3'
+require 'base64'
 
 ROOT = File.expand_path('..', __dir__)
 
@@ -29,7 +30,12 @@ bin = capture('swift', 'build', '-c', 'release', '--show-bin-path').lines.last.s
 gui = File.join(bin, 'VQMetrixApp')
 vmaf = dependencies(gui).find { |path| File.basename(path).match?(/\Alibvmaf\..*dylib\z/) }
 abort 'Missing libvmaf' unless vmaf && File.file?(vmaf)
-extra = dependencies(gui).reject { |path| system_library?(path) || path == vmaf }
+sparkle = Dir[File.join(ROOT, '.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-*/Sparkle.framework')].first
+abort 'Missing Sparkle framework' unless sparkle
+update_config = JSON.parse(File.read(File.join(ROOT, 'Support/updates.json')))
+abort 'Invalid Sparkle public key' unless Base64.strict_decode64(update_config.fetch('public_ed_key')).bytesize == 32
+abort 'Update feed must use HTTPS' unless update_config.fetch('feed_url').start_with?('https://')
+extra = dependencies(gui).reject { |path| system_library?(path) || path == vmaf || path.include?('/Sparkle.framework/') }
 extra += dependencies(vmaf).reject { |path| system_library?(path) || File.basename(path) == File.basename(vmaf) }
 abort "Additional dependencies need bundling and license handling: #{extra.join(', ')}" unless extra.empty?
 vmaf_real = File.realpath(vmaf)
@@ -42,6 +48,12 @@ resources = File.join(contents, 'Resources')
 frameworks = File.join(contents, 'Frameworks')
 FileUtils.mkdir_p([resources, File.join(contents, 'MacOS'), frameworks, File.join(resources, 'Licenses')])
 FileUtils.cp(gui, File.join(contents, 'MacOS/VQMetrix'))
+# Keep Sparkle's nested helpers and framework symlinks, including its vendor signature.
+capture('ditto', sparkle, File.join(frameworks, 'Sparkle.framework'))
+load_commands = capture('otool', '-l', gui)
+unless load_commands.include?('@executable_path/../Frameworks')
+  capture('install_name_tool', '-add_rpath', '@executable_path/../Frameworks', File.join(contents, 'MacOS/VQMetrix'))
+end
 resource_bundle = File.join(bin, 'VQMetrix_VQMetrixCore.bundle')
 abort 'Missing localization resources' unless File.directory?(resource_bundle)
 FileUtils.cp_r(resource_bundle, resources)
@@ -61,6 +73,7 @@ capture('install_name_tool', '-change', vmaf, "@executable_path/../Frameworks/#{
   'HaishinKit.txt' => File.expand_path('../HaishinKit.swift/LICENSE.md', ROOT),
   'Logboard.txt' => File.join(ROOT, '.build/checkouts/Logboard/LICENSE.md'),
   'libvmaf.txt' => vmaf_license,
+  'Sparkle.txt' => File.join(ROOT, '.build/checkouts/Sparkle/LICENSE'),
   'ZIPFoundation.txt' => File.join(ROOT, '.build/checkouts/ZIPFoundation/LICENSE')
 }.each { |name, source| FileUtils.cp(source, File.join(resources, 'Licenses', name)) }
 iconset = File.join(ROOT, '.build/AppIcon.iconset')
@@ -87,7 +100,12 @@ File.write(File.join(contents, 'Info.plist'), <<~PLIST)
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>#{short_version}</string>
   <key>VQMetrixReleaseVersion</key><string>#{version}</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleVersion</key><string>#{version}</string>
+  <key>SUFeedURL</key><string>#{update_config.fetch('feed_url')}</string>
+  <key>SUPublicEDKey</key><string>#{update_config.fetch('public_ed_key')}</string>
+  <key>SURequireSignedFeed</key><true/>
+  <key>SUVerifyUpdateBeforeExtraction</key><true/>
+  <key>SUAutomaticallyUpdate</key><false/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSMinimumSystemVersion</key><string>#{minimum}</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>

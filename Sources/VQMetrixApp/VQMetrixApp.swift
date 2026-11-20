@@ -255,11 +255,15 @@ struct BenchmarkView: View {
 
 @main
 struct VQMetrixApp: App {
+    @StateObject private var updates = AppUpdates()
     @AppStorage("appLanguage") private var language = AppLanguage.system
     var body: some Scene {
         WindowGroup("VQMetrix") { WorkspaceView() }
             .defaultSize(width: 1240, height: 880)
             .commands {
+                CommandGroup(after: .appInfo) {
+                    UpdateCommands(updates: updates, language: language)
+                }
                 CommandGroup(replacing: .help) {
                     Button(language.text("VMAF score guide")) { NSWorkspace.shared.open(DocumentationLinks.scores(language)) }
                 }

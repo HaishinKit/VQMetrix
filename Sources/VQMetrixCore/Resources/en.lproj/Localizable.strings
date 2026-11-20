@@ -158,3 +158,6 @@
 "Hardware encoder" = "Hardware encoder";
 "Software encoder" = "Software encoder";
 "Actual bitrate" = "Actual bitrate";
+
+"Check for Updates…" = "Check for Updates…";
+"Automatically check for updates" = "Automatically check for updates";

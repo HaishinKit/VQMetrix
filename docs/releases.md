@@ -12,6 +12,7 @@ The tag workflow tests and packages:
 - The HaishinKit.kt Example is compiled for integration verification; its APK distribution belongs to HaishinKit.kt and is not attached here.
 - The standalone Android transfer AAR, sources and Maven POM.
 - Swift DocC and Kotlin Dokka, combined into `api-documentation.tar.gz`.
+- A signed Sparkle appcast for stable releases after updater integration.
 - SHA256SUMS.txt for the release assets.
 
 The Android artifact is `com.github.HaishinKit:VQMetrix:1.0.0` on JitPack.
@@ -45,3 +46,9 @@ open the language-appropriate DocC VMAF score guide.
 For offline reading, extract the documentation archive and run `ruby serve.rb`.
 It binds to localhost and serves `/VQMetrix/`; it does not receive video uploads.
 Failure-reporting helpers use runner Ruby without Bundler or gems.
+
+## Automatic updates
+
+See [automatic macOS updates](automatic-updates.md) for the signing secret, stable feed,
+verification, and the one-time manual migration from 1.0.0. Private-key setup must be
+completed before publishing the next stable tag.

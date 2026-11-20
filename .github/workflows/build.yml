@@ -54,6 +54,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/macos-artifacts"
           tar -czf "$RUNNER_TEMP/macos-artifacts/swift-reference.tar.gz" -C "$RUNNER_TEMP/swift-reference" swift
           cp .build/VQMetrix-macos-*.zip "$RUNNER_TEMP/macos-artifacts/"
+      - name: Sign and verify update feed
+        if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          /usr/bin/ruby Scripts/build_appcast.rb
+          cp .build/appcast.xml "$RUNNER_TEMP/macos-artifacts/"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: VQMetrix-macOS

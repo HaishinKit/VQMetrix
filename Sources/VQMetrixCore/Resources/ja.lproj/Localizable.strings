@@ -158,3 +158,6 @@
 "Hardware encoder" = "ハードウェアエンコーダー";
 "Software encoder" = "ソフトウェアエンコーダー";
 "Actual bitrate" = "実ビットレート";
+
+"Check for Updates…" = "アップデートを確認…";
+"Automatically check for updates" = "アップデートを自動で確認";

@@ -1,5 +1,5 @@
 {
-  "originHash" : "c89c9cc5a2525542f19255e7ee836906618f21348bfd2143571561a90ef8705d",
+  "originHash" : "9fe173b71287f9fe25c72673c5920f0358b8cd7d2feff4469ddda500f3fb52eb",
   "pins" : [
     {
       "identity" : "libdatachannel-xcframework",
@@ -35,6 +35,15 @@
       "state" : {
         "revision" : "4ac3f9a68731cb3cf736a591814bad9a7a2008c8",
         "version" : "3.6.5000"
+      }
+    },
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "ab7d71291238df6e0492143b120c9b696a35f603",
+        "version" : "2.10.1"
       }
     },
     {
