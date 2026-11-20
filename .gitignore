@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+.DS_Store
+Android/.gradle/
+Android/**/build/
+Android/local.properties
+Android/.kotlin/

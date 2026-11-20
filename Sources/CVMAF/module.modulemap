@@ -1,0 +1,5 @@
+module CVMAF [system] {
+    header "shim.h"
+    link "vmaf"
+    export *
+}

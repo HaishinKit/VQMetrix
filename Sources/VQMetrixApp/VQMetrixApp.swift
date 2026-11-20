@@ -1,0 +1,284 @@
+import AppKit
+@preconcurrency import AVFoundation
+import Charts
+import SwiftUI
+import UniformTypeIdentifiers
+import VQMetrixCore
+
+@MainActor
+private final class PreviewSurface: NSView {
+    let videoLayer = AVSampleBufferDisplayLayer()
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.cgColor
+        videoLayer.videoGravity = .resizeAspect
+        layer?.addSublayer(videoLayer)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layout() { super.layout(); videoLayer.frame = bounds }
+
+    func display(_ sample: CMSampleBuffer) {
+        guard let image = sample.imageBuffer, let format = sample.formatDescription else { return }
+        var timing = CMSampleTimingInfo(duration: .invalid, presentationTimeStamp: .zero, decodeTimeStamp: .invalid)
+        var immediate: CMSampleBuffer?
+        guard CMSampleBufferCreateReadyWithImageBuffer(allocator: nil, imageBuffer: image,
+            formatDescription: format, sampleTiming: &timing, sampleBufferOut: &immediate) == noErr,
+              let immediate else { return }
+        if let attachments = CMSampleBufferGetSampleAttachmentsArray(immediate, createIfNecessary: true) {
+            let dictionary = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
+            CFDictionarySetValue(dictionary, Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
+                Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
+        }
+        if videoLayer.status == .failed { videoLayer.flush() }
+        if videoLayer.isReadyForMoreMediaData { videoLayer.enqueue(immediate) }
+    }
+}
+
+private struct VideoPreview: NSViewRepresentable {
+    let sample: CMSampleBuffer?
+    final class Coordinator { var lastPTS: CMTime? }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> PreviewSurface { PreviewSurface(frame: .zero) }
+    func updateNSView(_ view: PreviewSurface, context: Context) {
+        guard let sample else {
+            if context.coordinator.lastPTS != nil { view.videoLayer.flushAndRemoveImage() }
+            context.coordinator.lastPTS = nil
+            return
+        }
+        guard context.coordinator.lastPTS != sample.presentationTimeStamp else { return }
+        context.coordinator.lastPTS = sample.presentationTimeStamp
+        view.display(sample)
+    }
+}
+
+private struct PreviewPanel: View {
+    let title: String
+    let subtitle: String
+    let sample: CMSampleBuffer?
+    let language: AppLanguage
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text(title).font(.headline)
+                Spacer()
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+            ZStack {
+                Color.black
+                VideoPreview(sample: sample)
+                if sample == nil {
+                    Label(language.text("Waiting for video"), systemImage: "video").foregroundStyle(.gray)
+                }
+            }
+            .frame(height: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+}
+
+struct ScoreChart: View, Equatable {
+    let points: [QualityPoint]
+    let language: AppLanguage
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.language == rhs.language && lhs.points.count == rhs.points.count && lhs.points.last?.id == rhs.points.last?.id
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(language.text("VMAF timeline")).font(.headline)
+                Spacer()
+                Text(language.text("Updates about once per second · separate segments per setting")).font(.caption).foregroundStyle(.secondary)
+            }
+            Chart {
+                ForEach(points.suffix(1800)) { point in
+                    LineMark(x: .value(language.text("Time (seconds)"), point.pts), y: .value("VMAF", point.score),
+                        series: .value(language.text("Segment"), point.series))
+                    .foregroundStyle(by: .value(language.text("Settings"), point.series))
+                    .interpolationMethod(.linear)
+                }
+            }
+            .chartYScale(domain: 0...100)
+            .chartXAxisLabel(language.text("Time (seconds)"))
+            .chartLegend(position: .bottom, alignment: .leading)
+            .frame(height: 155)
+            .overlay {
+                if points.isEmpty { Text(language.text("The chart appears when scores are ready.")).foregroundStyle(.secondary) }
+            }
+        }
+    }
+}
+
+private struct Metric: View {
+    let title: String
+    let value: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 25, weight: .semibold, design: .rounded)).monospacedDigit()
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private enum InputKind: String { case file, camera }
+
+struct BenchmarkView: View {
+    let language: AppLanguage
+    @State private var inputKind = InputKind.file
+    @State private var cameras: [CameraInfo] = []
+    @State private var cameraID = ""
+    @StateObject private var engine = LiveBenchmark()
+    @State private var input: URL?
+    @State private var duration = 30
+    @State private var bitrateMbps = 2.0
+    @State private var codec = BenchmarkCodec.h264
+
+    private var settings: BenchmarkSettings? {
+        guard bitrateMbps.isFinite, bitrateMbps > 0, bitrateMbps <= 100 else { return nil }
+        return BenchmarkSettings(codec: codec, bitrate: Int(bitrateMbps * 1_000_000))
+    }
+
+    private func chooseVideo() {
+        let panel = NSOpenPanel()
+        panel.title = language.text("Choose a video file")
+        panel.prompt = language.text("Open")
+        panel.allowedContentTypes = [.movie]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK { input = panel.url }
+    }
+
+    private func refreshCameras() {
+        cameras = LiveBenchmark.cameras()
+        if !cameras.contains(where: { $0.id == cameraID }) { cameraID = cameras.first?.id ?? "" }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                Image(nsImage: NSApplication.shared.applicationIconImage).resizable().frame(width: 48, height: 48)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("VQMetrix").font(.title.bold())
+                    Text(language.text("Measure video quality as you watch.")).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(engine.formatLabel).font(.caption).foregroundStyle(.secondary)
+            }
+            GroupBox {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Picker(language.text("Input"), selection: $inputKind) {
+                            Text(language.text("Video file")).tag(InputKind.file)
+                            Text(language.text("Camera")).tag(InputKind.camera)
+                        }.pickerStyle(.segmented).frame(width: 220).disabled(engine.isRunning)
+                        if inputKind == .file {
+                            Text(input?.lastPathComponent ?? language.text("Choose a video file"))
+                                .lineLimit(1).truncationMode(.middle)
+                            Spacer()
+                            Button(language.text("Choose video…"), action: chooseVideo).disabled(engine.isRunning)
+                        } else {
+                            if cameras.isEmpty {
+                                Text(language.text("No cameras found")).foregroundStyle(.secondary)
+                            } else {
+                                Picker(language.text("Camera"), selection: $cameraID) {
+                                    ForEach(cameras) { Text($0.name).tag($0.id) }
+                                }.labelsHidden().frame(maxWidth: 360).disabled(engine.isRunning)
+                            }
+                            Spacer()
+                            Button(language.text("Refresh"), action: refreshCameras).disabled(engine.isRunning)
+                        }
+                    }
+                    Divider()
+                    HStack(spacing: 18) {
+                        Picker(language.text("Codec"), selection: $codec) {
+                            ForEach(BenchmarkCodec.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                        }.frame(width: 180).disabled(engine.isApplying)
+                        HStack(spacing: 6) {
+                            Text(language.text("Bitrate"))
+                            TextField("Mbps", value: $bitrateMbps, format: .number).frame(width: 65)
+                                .accessibilityLabel(language.text("Bitrate Mbps"))
+                            Text("Mbps").foregroundStyle(.secondary)
+                        }.disabled(engine.isApplying)
+                        if engine.isRunning {
+                            Button(language.text(engine.isApplying ? "Applying…" : "Apply changes")) {
+                                if let settings { engine.apply(settings) }
+                            }.disabled(settings == nil || settings == engine.activeSettings || engine.isApplying)
+                        }
+                        Spacer()
+                        Stepper(language.text("%@ seconds", String(duration)), value: $duration, in: 1...300)
+                            .frame(width: 125).disabled(engine.isRunning)
+                    }
+                }.padding(8)
+            }
+            HStack(spacing: 18) {
+                PreviewPanel(title: language.text("MediaMixer output"), subtitle: language.text("Uncompressed reference"), sample: engine.sourceSample, language: language)
+                PreviewPanel(title: language.text("Encoded output"), subtitle: engine.activeSettings?.label ?? language.text("After encoding and decoding"), sample: engine.decodedSample, language: language)
+            }
+            HStack(spacing: 20) {
+                Metric(title: language.text("Latest VMAF"), value: engine.latestScore.map { String(format: "%.2f", $0) } ?? "—")
+                Metric(title: language.text("Current segment mean"), value: engine.meanScore.map { String(format: "%.2f", $0) } ?? "—")
+                Metric(title: language.text("Evaluated / decoded frames"), value: "\(engine.scores.count) / \(engine.decodedFrames)")
+                Metric(title: language.text("Elapsed time"), value: language.text("%@ s", String(format: "%.1f", engine.currentPTS)))
+            }.padding(.vertical, 4)
+            ScoreChart(points: engine.scores, language: language).equatable()
+            Divider()
+            HStack(spacing: 12) {
+                if engine.isRunning { ProgressView().controlSize(.small) }
+                Text(engine.status).font(.callout).lineLimit(2)
+                Spacer()
+                Button(language.text("Show results")) {
+                    if let directory = engine.resultDirectory { NSWorkspace.shared.open(directory) }
+                }.disabled(engine.resultDirectory == nil || engine.isRunning)
+                if engine.isRunning {
+                    Button(language.text("Stop"), action: engine.stop)
+                } else {
+                    Button(language.text("Start measurement")) {
+                        if let settings {
+                            if inputKind == .file, let input { engine.start(input: input, settings: settings, duration: Double(duration)) }
+                            else if let camera = cameras.first(where: { $0.id == cameraID }) {
+                                engine.start(cameraID: camera.id, name: camera.name, settings: settings, duration: Double(duration))
+                            }
+                        }
+                    }.buttonStyle(.borderedProminent).disabled(settings == nil || (inputKind == .file ? input == nil : cameraID.isEmpty))
+                }
+            }
+            Text(language.text("Encoding and decoding run on this device. Network delivery is excluded. Skipped evaluation frames are recorded."))
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(22)
+        .frame(minWidth: 960, minHeight: 780)
+        .onAppear { engine.language = language; refreshCameras() }
+        .onChange(of: language) { engine.language = $0 }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in engine.stop() }
+    }
+}
+
+@main
+struct VQMetrixApp: App {
+    var body: some Scene {
+        WindowGroup("VQMetrix") { WorkspaceView() }
+            .defaultSize(width: 1080, height: 860)
+    }
+}
+
+private struct WorkspaceView: View {
+    @AppStorage("appLanguage") private var language = AppLanguage.system
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Picker(language.text("Language"), selection: $language) {
+                    Text(language.text("System")).tag(AppLanguage.system)
+                    Text("English").tag(AppLanguage.english)
+                    Text("日本語").tag(AppLanguage.japanese)
+                }.frame(width: 230)
+            }.padding(.horizontal, 24).padding(.top, 12)
+            TabView {
+                BenchmarkView(language: language)
+                    .tabItem { Label(language.text("Measurement"), systemImage: "waveform.path.ecg") }
+                HistoryView(language: language)
+                    .tabItem { Label(language.text("History"), systemImage: "clock.arrow.circlepath") }
+            }
+        }.environment(\.locale, language.locale)
+    }
+}

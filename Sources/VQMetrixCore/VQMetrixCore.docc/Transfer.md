@@ -1,0 +1,79 @@
+# Transfer protocol v1
+
+This is the contract implemented by the Android producer. A macOS receiver and its
+evaluation queue remain to be implemented; the desktop app does not yet expose this API.
+
+## Upload
+
+`POST /api/v1/runs` over HTTPS. The app accepts a base URL and appends this path.
+
+Headers:
+
+- `Content-Type: application/zip`
+- `Content-Length`: complete package size; upload is streamed
+- `Authorization: Bearer <receiver token>`
+- `Idempotency-Key`: run UUID, reused on retry
+- `X-VQMetrix-Protocol: 1`
+
+Use a system-trusted certificate. The client does not follow redirects or disable TLS
+validation. A LAN receiver may need Android local-network permission.
+
+A successful response uses HTTP 200, 201, or 202 and a JSON body:
+
+```json
+{"jobId":"12345678-1234-1234-1234-123456789abc","status":"queued"}
+```
+
+The job ID must be a UUID. The client records acceptance, not evaluation completion.
+Errors and missing/invalid IDs do not create a success receipt. Responses are limited
+to 64 KiB. A receiver should return the same job ID for a retry with the same run ID and
+archive digest, or HTTP 409 if the same ID is used for different data.
+
+## ZIP layout
+
+Only root-level files are written:
+
+```text
+manifest.json
+reference.y4m
+frame-map.json
+h264-500000.mp4
+h264-1000000.mp4
+h264-2000000.mp4
+```
+
+HEVC uses `hevc-<bitrate>.mp4`. Each package contains one codec and up to six bitrates.
+A new capture gets a new UUID; all variants in a package share the exact raw input.
+
+`manifest.json` uses schema `vqmetrix.capture.v1` and `schemaVersion: 1`:
+
+- `runId`, ISO-8601 `createdAt`, and device manufacturer/model/API/app version
+- `reference`: filename, source, width/height, FPS numerator/denominator, frame count,
+  `pixelFormat: yuv420p`, bit depth 8, color range/matrix, sensor orientation, and frame-map filename
+- `variants`: filename, codec, target/actual payload bitrate, codec implementation name,
+  hardware-acceleration flag, dimensions, and output frame count
+- `files`: filename (`path`), exact byte size, SHA-256 for every payload except the manifest itself
+
+`frame-map.json` contains `referencePtsUs`, `captureTimestampsNs`, and `variants` (MP4
+filename to presentation-time array). Synthetic inputs have no sensor timestamps.
+Reference and encoded time use `floor(frameIndex * 1_000_000 / fps)` microseconds,
+starting at zero. Camera samples preserve captured bytes while using a common CFR
+replay timeline; the original sensor timing is retained for analysis.
+
+Test-pattern v1 is limited-range BT.709. Unknown camera color range and matrix are
+explicitly `unspecified`; the evaluator must resolve these rather than silently assume
+a conversion. Compare unrotated pixel coordinates, or apply identical transformations
+to both sides. Sensor orientation is presentation metadata, not a one-sided VMAF transform.
+
+## Receiver requirements
+
+Stream uploads to temporary storage with size limits (suggested maximum: 1 GiB compressed
+and extracted). Authenticate before accepting a body. Reject duplicate ZIP entries,
+absolute/nested/traversal paths, symlinks, and any filename outside the declared layout.
+Validate actual extracted sizes, CRC, and SHA-256; never trust only ZIP metadata.
+
+Validate Y4M dimensions, format and frame count, decode every candidate, and verify its
+frame count and timestamp correspondence before evaluating. Preserve the original
+package and settings, record validation failures, and queue VMAF outside the upload
+request. Export results through the same history/report model as local runs. Future
+status polling can use `GET /api/v1/jobs/<jobId>`; it is not required by the current client.

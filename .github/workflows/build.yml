@@ -1,0 +1,218 @@
+name: Build and release
+on:
+  push:
+    branches: [main]
+    tags: ['v*', '[0-9]*.[0-9]*.[0-9]*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+jobs:
+  macos:
+    name: macOS app and Swift reference
+    runs-on: macos-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: VQMetrix
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: VQMetrix
+          persist-credentials: false
+      - id: versions
+        name: Resolve pinned versions
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '0.1.0' }}
+        run: /usr/bin/ruby Scripts/ci_versions.rb
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: HaishinKit/HaishinKit.swift
+          ref: ${{ steps.versions.outputs.swift_revision }}
+          path: HaishinKit.swift
+          persist-credentials: false
+      - name: Install VMAF
+        run: brew install libvmaf pkgconf
+      - name: Prepare development adapter
+        run: /usr/bin/ruby Scripts/prepare_dependencies.rb swift
+      - name: Run unit tests
+        run: swift test --skip LiveBenchmarkTests
+      - name: Build and package app
+        env:
+          VQMETRIX_VERSION: ${{ steps.versions.outputs.version }}
+        run: /usr/bin/ruby Scripts/build_app.rb
+      - name: Generate Swift reference
+        run: |
+          mkdir -p "$RUNNER_TEMP/swift-reference"
+          swift package --allow-writing-to-directory "$RUNNER_TEMP/swift-reference" generate-documentation \
+            --target VQMetrixCore --symbol-graph-minimum-access-level internal --disable-indexing \
+            --transform-for-static-hosting --hosting-base-path VQMetrix/swift \
+            --output-path "$RUNNER_TEMP/swift-reference/swift"
+          tar -czf "$RUNNER_TEMP/swift-reference.tar.gz" -C "$RUNNER_TEMP/swift-reference" swift
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: VQMetrix-macOS
+          path: |
+            VQMetrix/.build/VQMetrix-macos-*.zip
+            ${{ runner.temp }}/swift-reference.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+      - name: Report failure
+        if: failure()
+        working-directory: ${{ github.workspace }}
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          if [ -f VQMetrix/Scripts/report_failures.rb ]; then
+            /usr/bin/ruby VQMetrix/Scripts/report_failures.rb
+          else
+            echo '::error::Checkout failed before failure reporting was available.'
+          fi
+  android:
+    name: Android app and Kotlin reference
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: VQMetrix
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: VQMetrix
+          persist-credentials: false
+      - id: versions
+        name: Resolve pinned versions
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '0.1.0' }}
+        run: /usr/bin/ruby Scripts/ci_versions.rb
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: HaishinKit/HaishinKit.kt
+          ref: ${{ steps.versions.outputs.android_revision }}
+          path: HaishinKit.kt
+          persist-credentials: false
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0'
+      - name: Prepare development adapter
+        run: /usr/bin/ruby Scripts/prepare_dependencies.rb android
+      - name: Build, test, and document Android
+        env:
+          APP_VERSION: ${{ steps.versions.outputs.version }}
+        run: |
+          ./Android/gradlew -p Android :app:assembleDebug :producer:testDebugUnitTest :producer:lintDebug :producer:dokkaGenerate \
+            -PappVersionName="$APP_VERSION"
+          cp Android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/VQMetrix-Android-debug.apk"
+          mkdir -p "$RUNNER_TEMP/android-reference/android"
+          cp -R Android/producer/build/dokka/html/. "$RUNNER_TEMP/android-reference/android/"
+          tar -czf "$RUNNER_TEMP/android-reference.tar.gz" -C "$RUNNER_TEMP/android-reference" android
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: VQMetrix-Android
+          path: |
+            ${{ runner.temp }}/VQMetrix-Android-debug.apk
+            ${{ runner.temp }}/android-reference.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+      - name: Report failure
+        if: failure()
+        working-directory: ${{ github.workspace }}
+        env:
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          if [ -f VQMetrix/Scripts/report_failures.rb ]; then
+            /usr/bin/ruby VQMetrix/Scripts/report_failures.rb
+          else
+            echo '::error::Checkout failed before failure reporting was available.'
+          fi
+  documentation:
+    name: Assemble documentation
+    needs: [macos, android]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: VQMetrix-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/artifacts
+      - name: Assemble API site
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '0.1.0' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          tar -xzf "$RUNNER_TEMP/artifacts/swift-reference.tar.gz" -C "$RUNNER_TEMP/site"
+          tar -xzf "$RUNNER_TEMP/artifacts/android-reference.tar.gz" -C "$RUNNER_TEMP/site"
+          ruby Scripts/build_documentation_site.rb "$RUNNER_TEMP/site" "$RELEASE_TAG"
+          tar -czf "$RUNNER_TEMP/api-documentation.tar.gz" -C "$RUNNER_TEMP/site" .
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: VQMetrix-API
+          path: ${{ runner.temp }}/api-documentation.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        if: github.ref_type == 'tag' && vars.PUBLISH_PAGES == 'true'
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.ref_type == 'tag' && vars.PUBLISH_PAGES == 'true'
+        with:
+          path: ${{ runner.temp }}/site
+  release:
+    name: Attach apps and reference to release
+    if: github.ref_type == 'tag'
+    needs: documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: VQMetrix-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/artifacts
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_DIRECTORY: ${{ runner.temp }}/artifacts
+        run: ruby Scripts/publish_release.rb
+  pages:
+    name: Publish documentation site
+    if: github.ref_type == 'tag' && vars.PUBLISH_PAGES == 'true'
+    needs: documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

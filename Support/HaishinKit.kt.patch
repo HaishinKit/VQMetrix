@@ -1,0 +1,184 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index 217e2424..d0e15a2c 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -14,6 +14,7 @@ android {
+         targetSdk = 37
+         versionCode = 1
+         versionName = "1.0"
++        buildConfigField("boolean", "VQMETRIX_AVAILABLE", (rootProject.findProject(":vqmetrix-producer") != null).toString())
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+         vectorDrawables { useSupportLibrary = true }
+@@ -39,7 +40,10 @@ android {
+             )
+         }
+     }
+-    buildFeatures { compose = true }
++    buildFeatures {
++        compose = true
++        buildConfig = true
++    }
+     packaging {
+         resources {
+             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+@@ -52,6 +56,9 @@ android {
+ }
+ 
+ dependencies {
++    if (rootProject.findProject(":vqmetrix-producer") != null) {
++        implementation(project(":vqmetrix-producer"))
++    }
+     implementation(project(":haishinkit"))
+     implementation(project(":vulkan"))
+     implementation(project(":rtmp"))
+diff --git a/app/src/main/java/com/haishinkit/app/PreferenceScreen.kt b/app/src/main/java/com/haishinkit/app/PreferenceScreen.kt
+index 0b8d94fa..7797bf93 100644
+--- a/app/src/main/java/com/haishinkit/app/PreferenceScreen.kt
++++ b/app/src/main/java/com/haishinkit/app/PreferenceScreen.kt
+@@ -60,6 +60,16 @@ fun PreferenceScreen(
+         verticalArrangement = Arrangement.spacedBy(8.dp),
+     ) {
+         val keyboardController = LocalSoftwareKeyboardController.current
++        if (BuildConfig.VQMETRIX_AVAILABLE) {
++            val qualityToolContext = LocalContext.current
++            Button(onClick = {
++                qualityToolContext.startActivity(
++                    Intent().setClassName(qualityToolContext, "com.haishinkit.vqmetrix.VQMetrixActivity"),
++                )
++            }) {
++                Text("VQMetrix — Quality test capture")
++            }
++        }
+         var streamUrl by remember { mutableStateOf(Preference.shared.streamURL) }
+         TextField(
+             label = { Text("Publish URL (RTMP / SRT / WHIP)") },
+diff --git a/haishinkit/src/main/java/com/haishinkit/codec/VideoCodec.kt b/haishinkit/src/main/java/com/haishinkit/codec/VideoCodec.kt
+index 22975a5a..63b7f762 100644
+--- a/haishinkit/src/main/java/com/haishinkit/codec/VideoCodec.kt
++++ b/haishinkit/src/main/java/com/haishinkit/codec/VideoCodec.kt
+@@ -117,7 +117,9 @@ class VideoCodec(
+     var frameRate = DEFAULT_FRAME_RATE
+         set(value) {
+             field = value
+-            pixelTransform.frameRate = value
++            if (inputColorFormat == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
++                pixelTransform.frameRate = value
++            }
+         }
+ 
+     /**
+@@ -140,6 +142,19 @@ class VideoCodec(
+      */
+     var profileLevel: VideoCodecProfileLevel = DEFAULT_PROFILE_LEVEL
+ 
++    /**
++     * Encoder input color format. Set before starting the codec.
++     *
++     * The default uses a rendering surface. Set `COLOR_FormatYUV420Flexible` to
++     * supply images through [Codec.Listener.onInputBufferAvailable] instead.
++     * The selected encoder must support the requested format.
++     */
++    var inputColorFormat: Int = DEFAULT_COLOR_FORMAT
++        set(value) {
++            check(!isRunning.get()) { "Set the input color format before starting the codec." }
++            field = value
++        }
++
+     /**
+      * The pixel transform instance.
+      */
+@@ -160,17 +175,12 @@ class VideoCodec(
+     override var codec: MediaCodec?
+         get() = super.codec
+         set(value) {
+-            if (value == null) {
++            if (value == null && inputColorFormat == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
+                 pixelTransform.surface = null
+             }
+             super.codec = value
+         }
+ 
+-    /**
+-     * Specifies the color format for a surface.
+-     */
+-    private var colorFormat = DEFAULT_COLOR_FORMAT
+-
+     override fun createMediaFormat(mime: String): MediaFormat =
+         MediaFormat.createVideoFormat(mime, width, height).apply {
+             if (mode == MODE_ENCODE) {
+@@ -180,7 +190,7 @@ class VideoCodec(
+                 setInteger(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 1000000 / frameRate)
+                 setInteger(MediaFormat.KEY_CHANNEL_COUNT, 1)
+                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IFrameInterval)
+-                setInteger(MediaFormat.KEY_COLOR_FORMAT, colorFormat)
++                setInteger(MediaFormat.KEY_COLOR_FORMAT, inputColorFormat)
+                 setInteger(MediaFormat.KEY_PROFILE, profileLevel.profile)
+                 if (Build.VERSION_CODES.M <= Build.VERSION.SDK_INT) {
+                     setInteger(MediaFormat.KEY_LEVEL, profileLevel.level)
+@@ -196,7 +206,7 @@ class VideoCodec(
+ 
+     override fun configure(codec: MediaCodec) {
+         super.configure(codec)
+-        if (mode == MODE_ENCODE) {
++        if (mode == MODE_ENCODE && inputColorFormat == MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) {
+             pixelTransform.imageExtent = Size(width, height)
+             pixelTransform.surface = codec.createInputSurface()
+         }
+diff --git a/settings.gradle.kts b/settings.gradle.kts
+index 0b9a8225..23c105c3 100644
+--- a/settings.gradle.kts
++++ b/settings.gradle.kts
+@@ -29,3 +29,10 @@ include(":rtmp")
+ include(":srt")
+ include(":vulkan")
+ include(":rtc")
++
++// Optional developer tool when the VQMetrix checkout is available beside this repository.
++val vqmetrixDirectory = file(providers.gradleProperty("vqmetrixDir").orElse("../VQMetrix/Android/producer").get())
++if (vqmetrixDirectory.resolve("build.gradle.kts").isFile) {
++    include(":vqmetrix-producer")
++    project(":vqmetrix-producer").projectDir = vqmetrixDirectory
++}
+diff --git a/haishinkit/src/test/java/com/haishinkit/codec/VideoCodecRawInputTest.kt b/haishinkit/src/test/java/com/haishinkit/codec/VideoCodecRawInputTest.kt
+new file mode 100644
+index 00000000..1c5abeb7
+--- /dev/null
++++ b/haishinkit/src/test/java/com/haishinkit/codec/VideoCodecRawInputTest.kt
+@@ -0,0 +1,36 @@
++package com.haishinkit.codec
++
++import android.media.MediaCodecInfo
++import com.haishinkit.graphics.PixelTransform
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertThrows
++import org.junit.Test
++import org.junit.runner.RunWith
++import org.robolectric.RobolectricTestRunner
++import org.robolectric.RuntimeEnvironment
++import org.robolectric.annotation.Config
++
++@RunWith(RobolectricTestRunner::class)
++@Config(manifest = Config.NONE, sdk = [29])
++class VideoCodecRawInputTest {
++    @Test
++    fun rawInputDoesNotCreateASurfaceRenderer() {
++        val previous = PixelTransform.factory
++        PixelTransform.factory = { throw AssertionError("Raw input must not allocate a renderer") }
++        val codec = VideoCodec(RuntimeEnvironment.getApplication())
++        try {
++            assertEquals(MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface, codec.inputColorFormat)
++            codec.inputColorFormat = MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible
++            codec.frameRate = 15
++            codec.isRunning.set(true)
++            assertThrows(IllegalStateException::class.java) {
++                codec.inputColorFormat = MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface
++            }
++            codec.isRunning.set(false)
++            codec.dispose()
++        } finally {
++            codec.isRunning.set(false)
++            PixelTransform.factory = previous
++        }
++    }
++}

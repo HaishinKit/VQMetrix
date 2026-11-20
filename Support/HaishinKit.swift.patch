@@ -1,0 +1,105 @@
+diff --git a/HaishinKit/Sources/Codec/VTSessionConvertible.swift b/HaishinKit/Sources/Codec/VTSessionConvertible.swift
+index 9278c6ee..f60e1206 100644
+--- a/HaishinKit/Sources/Codec/VTSessionConvertible.swift
++++ b/HaishinKit/Sources/Codec/VTSessionConvertible.swift
+@@ -13,6 +13,7 @@ protocol VTSessionConvertible {
+     func setOptions(_ options: Set<VTSessionOption>) -> OSStatus
+     func convert(_ sampleBuffer: CMSampleBuffer, continuation: AsyncStream<CMSampleBuffer>.Continuation?) throws
+     func invalidate()
++    func completeFrames() -> OSStatus
+ }
+ 
+ extension VTSessionConvertible where Self: VTSession {
+diff --git a/HaishinKit/Sources/Codec/VideoCodec.swift b/HaishinKit/Sources/Codec/VideoCodec.swift
+index 8dd08ae2..fc8d23af 100644
+--- a/HaishinKit/Sources/Codec/VideoCodec.swift
++++ b/HaishinKit/Sources/Codec/VideoCodec.swift
+@@ -47,6 +47,15 @@ final class VideoCodec {
+     }
+     private(set) var outputFormat: CMFormatDescription?
+ 
++    /// Drains VideoToolbox callbacks before the development tool closes its stream.
++    func finish() throws {
++        let status = session?.completeFrames() ?? noErr
++        guard status == noErr else {
++            throw VTSessionError.failedToConvert(status: status)
++        }
++        continuation?.finish()
++    }
++
+     func append(_ sampleBuffer: CMSampleBuffer) {
+         guard isRunning else {
+             return
+diff --git a/HaishinKit/Sources/Extension/VTCompressionSession+Extension.swift b/HaishinKit/Sources/Extension/VTCompressionSession+Extension.swift
+index 9f2c2f25..61312e02 100644
+--- a/HaishinKit/Sources/Extension/VTCompressionSession+Extension.swift
++++ b/HaishinKit/Sources/Extension/VTCompressionSession+Extension.swift
+@@ -8,6 +8,10 @@ extension VTCompressionSession {
+ }
+ 
+ extension VTCompressionSession: VTSessionConvertible {
++    func completeFrames() -> OSStatus {
++        VTCompressionSessionCompleteFrames(self, untilPresentationTimeStamp: .invalid)
++    }
++
+     @inline(__always)
+     func convert(_ sampleBuffer: CMSampleBuffer, continuation: AsyncStream<CMSampleBuffer>.Continuation?) throws {
+         guard let imageBuffer = sampleBuffer.imageBuffer else {
+diff --git a/HaishinKit/Sources/Extension/VTDecompressionSession+Extension.swift b/HaishinKit/Sources/Extension/VTDecompressionSession+Extension.swift
+index 6f7b6cc5..442fccdb 100644
+--- a/HaishinKit/Sources/Extension/VTDecompressionSession+Extension.swift
++++ b/HaishinKit/Sources/Extension/VTDecompressionSession+Extension.swift
+@@ -2,6 +2,11 @@ import Foundation
+ import VideoToolbox
+ 
+ extension VTDecompressionSession: VTSessionConvertible {
++    func completeFrames() -> OSStatus {
++        let status = VTDecompressionSessionFinishDelayedFrames(self)
++        return status == noErr ? VTDecompressionSessionWaitForAsynchronousFrames(self) : status
++    }
++
+     static let defaultDecodeFlags: VTDecodeFrameFlags = [
+         ._EnableAsynchronousDecompression,
+         ._EnableTemporalProcessing
+diff --git a/HaishinKit/Sources/Codec/VideoCodecProbe.swift b/HaishinKit/Sources/Codec/VideoCodecProbe.swift
+new file mode 100644
+index 00000000..93bdb2f5
+--- /dev/null
++++ b/HaishinKit/Sources/Codec/VideoCodecProbe.swift
+@@ -0,0 +1,36 @@
++import AVFoundation
++
++/// Experimental adapter for external codec benchmarking tools.
++/// The caller must serialize access to each instance.
++@_spi(VideoQuality)
++public final class VideoCodecProbe {
++    private let codec = VideoCodec()
++
++    public var settings: VideoCodecSettings {
++        get { codec.settings }
++        set { codec.settings = newValue }
++    }
++
++    public var outputStream: AsyncStream<CMSampleBuffer> {
++        codec.outputStream
++    }
++
++    public init() {
++    }
++
++    public func append(_ sampleBuffer: CMSampleBuffer) {
++        codec.append(sampleBuffer)
++    }
++
++    public func startRunning() {
++        codec.startRunning()
++    }
++
++    public func finish() throws {
++        try codec.finish()
++    }
++
++    public func stopRunning() {
++        codec.stopRunning()
++    }
++}

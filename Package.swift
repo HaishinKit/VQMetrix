@@ -1,0 +1,26 @@
+// swift-tools-version:6.0
+import PackageDescription
+
+let package = Package(
+    name: "VQMetrix",
+    defaultLocalization: "en",
+    platforms: [.macOS(.v13)],
+    products: [
+        .executable(name: "vqmetrix", targets: ["VQMetrixCLI"]),
+        .executable(name: "VQMetrixApp", targets: ["VQMetrixApp"])
+    ],
+    dependencies: [
+        .package(path: "../HaishinKit.swift"),
+        .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.5")
+    ],
+    targets: [
+        .systemLibrary(name: "CVMAF", pkgConfig: "libvmaf", providers: [.brew(["libvmaf"]) ]),
+        .target(name: "VQMetrixCore", dependencies: [.product(name: "HaishinKit", package: "HaishinKit.swift"), "CVMAF"], resources: [.process("Resources")]),
+        .executableTarget(name: "VQMetrixCLI", dependencies: [
+            .product(name: "HaishinKit", package: "HaishinKit.swift"), "CVMAF", "VQMetrixCore"
+        ]),
+        .executableTarget(name: "VQMetrixApp", dependencies: ["VQMetrixCore"]),
+        .testTarget(name: "VQMetrixTests", dependencies: ["VQMetrixCLI", "VQMetrixCore"])
+    ],
+    swiftLanguageModes: [.v6]
+)
