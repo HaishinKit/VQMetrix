@@ -255,9 +255,15 @@ struct BenchmarkView: View {
 
 @main
 struct VQMetrixApp: App {
+    @AppStorage("appLanguage") private var language = AppLanguage.system
     var body: some Scene {
         WindowGroup("VQMetrix") { WorkspaceView() }
             .defaultSize(width: 1240, height: 880)
+            .commands {
+                CommandGroup(replacing: .help) {
+                    Button(language.text("VMAF score guide")) { NSWorkspace.shared.open(DocumentationLinks.scores(language)) }
+                }
+            }
     }
 }
 
@@ -289,6 +295,9 @@ private struct WorkspaceView: View {
                 VStack(alignment:.leading,spacing:12) {
                     Label(language.text(receiver.status),systemImage:receiver.isRunning ? "network" : "pause.circle")
                         .font(.caption).foregroundStyle(.secondary)
+                    Link(destination:DocumentationLinks.scores(language)) {
+                        Label(language.text("VMAF score guide"),systemImage:"questionmark.circle")
+                    }.font(.callout)
                     Picker(language.text("Language"),selection:$language) {
                         Text(language.text("System")).tag(AppLanguage.system)
                         Text("English").tag(AppLanguage.english)

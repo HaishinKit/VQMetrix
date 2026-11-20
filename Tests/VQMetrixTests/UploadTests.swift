@@ -28,6 +28,11 @@ struct UploadTests {
     } catch { #expect((error as? UploadHTTPError)?.code == 429) }
     #expect(try limiter.parse(Self.headers(token:"0042"),token:"0042",now:start.addingTimeInterval(61)).length == 100)
 }
+@Test func rejectsInvalidSenderPerformance() throws {
+    let metadata: [String:Any] = ["schemaVersion":1,"platform":"android","mode":"offlineReplay","wallTimeMs":0,"frameCount":15,"throughputFps":150,"videoDurationMs":1000,"realtimeSpeed":10]
+    let value = try JSONDecoder().decode(EncodingPerformance.self,from:JSONSerialization.data(withJSONObject:metadata))
+    #expect(throws: (any Error).self) { try value.validate(frames:15,fps:15) }
+}
     @Test func rejectsZipTraversalAndSymlinks() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)

@@ -1,7 +1,6 @@
 import AVFoundation
 import Foundation
 import Testing
-@testable import VQMetrixCLI
 @testable import VQMetrixCore
 
 struct VQMetrixTests {
@@ -77,11 +76,4 @@ struct VQMetrixTests {
         }
     }
 
-    @Test func rejectsInvalidOptionsAndInputOverwrite() {
-        for arguments in [[String](), ["input.mp4", "--duration", "nan"], ["input.mp4", "--duration", "301"],
-                          ["input.mp4", "--bitrate", "0"], ["input.mp4", "--output", "input.mp4"],
-                          ["input.summary.json", "--output", "input.json"], ["input.mp4", "--unknown", "1"]] {
-            #expect(throws: QualityError.self) { try Options(arguments) }
-        }
-    }
 }

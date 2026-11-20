@@ -12,6 +12,10 @@ struct CaptureManifest: Codable, Sendable {
     struct Variant: Codable, Sendable {
         let file: String; let codec: String; let targetBitrate: Int
         let frameCount: Int; let width: Int; let height: Int
+        var performance: EncodingPerformance? = nil
+        var codecName: String? = nil
+        var hardwareAccelerated: Bool? = nil
+        var actualBitrate: Double? = nil
     }
     struct Payload: Codable, Sendable { let path: String; let size: Int64; let sha256: String }
     let schema: String; let schemaVersion: Int; let runId: String
@@ -88,6 +92,7 @@ enum UploadPackage {
                 throw QualityError("Variant settings differ from the reference")
             }
         }
+        for variant in manifest.variants { try variant.performance?.validate(frames:ref.frameCount,fps:ref.fpsNumerator) }
         let expected = Set([ref.file,ref.frameMap] + variantNames)
         guard Set(manifest.files.map(\.path)) == expected, manifest.files.count == expected.count,
               names == expected.union(["manifest.json"]) else { throw QualityError("Declared package files do not match ZIP") }

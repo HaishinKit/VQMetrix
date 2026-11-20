@@ -1,42 +1,62 @@
-# 📱 VQMetrix Android library
+# 📱 VQMetrix Android Transfer
 
-[![Android](https://img.shields.io/badge/Android-API%2029%2B-3ddc84)](producer/build.gradle.kts)
+[![JitPack](https://jitpack.io/v/HaishinKit/VQMetrix.svg)](https://jitpack.io/#HaishinKit/VQMetrix)
+[![Android](https://img.shields.io/badge/Android-API%2026%2B-3ddc84)](transfer/build.gradle.kts)
 
-Reusable capture, encoding, packaging, upload and Bonjour discovery for evaluation
-on macOS. VMAF runs on the Mac. The Android screen lives in HaishinKit.kt Example;
-VQMetrix does not have a standalone Android application.
+Upload evaluation packages and discover VQMetrix receivers through Bonjour.
+The transfer AAR has no HaishinKit dependency and runs on Android API 26+.
+Camera, MediaProjection, encoding and their UI live in HaishinKit.kt Example (API 29+).
 
-## 🚀 Build
+## 🚀 Install
 
-Check out HaishinKit.kt beside VQMetrix at the revision in `../Support/dependencies.json`.
-From the VQMetrix root, run `ruby Scripts/prepare_dependencies.rb android` to apply the
-Example integration, pending upstream inclusion.
-With JDK 17+ and Android SDK 37 installed, build from HaishinKit.kt:
+In `settings.gradle.kts`:
 
-```sh
-./gradlew :app:assembleDebug
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven("https://jitpack.io")
+    }
+}
 ```
 
-Use Save sample on its camera or MediaProjection screen. The VQMetrix screen in Preferences also creates test patterns and lets you choose H.264/HEVC,
-and target bitrates. Select a Bonjour receiver or enter its address, then upload a
-saved package. HTTP is limited to the trusted LAN; HTTPS requires a trusted certificate.
-Enable Receive in the macOS app to accept packages.
+In the consuming module:
 
-For another checkout layout, use `-PvqmetrixDir=/absolute/path/VQMetrix/Android/producer`.
-The Example feature is omitted when the VQMetrix checkout is absent.
+```kotlin
+dependencies {
+    implementation("com.github.HaishinKit.VQMetrix:transfer:1.0.0")
+}
+```
+
+`1.0.0` is the release tag and dependency version; do not add a `v` prefix.
+The library does not enable cleartext traffic globally. The host app must explicitly
+allow LAN HTTP when using the built-in Mac receiver and request local-network permission
+on Android versions that require it. HTTPS uses the platform trust store.
 
 ## 📚 Documentation
 
-[User guide](../docs/user-guide.md) · [Transfer and Bonjour protocol](../docs/transfer.md)
+[API reference](https://haishinkit.github.io/VQMetrix/android/) ·
+[Transfer protocol](../docs/transfer.md) · [User guide](../docs/user-guide.md)
 
-Generate Kotlin API documentation here with `./gradlew :producer:dokkaGenerate`.
-Tags attach the HaishinKit Example development APK and generated API references.
+Detailed API usage, cancellation and lifecycle rules are in Dokka. Use
+`BatchArchive`, `BatchUploader`, `ReceiverDiscovery`, and `ReceiverEndpoint` from
+`com.haishinkit.vqmetrix`.
 
-## 🧪 Tests
+## 🧰 Example and development
+
+HaishinKit.kt Example consumes the Maven artifact by default, without a neighboring
+VQMetrix checkout. For source development, use
+`-PvqmetrixTransferDir=/absolute/path/VQMetrix/Android/transfer` from HaishinKit.kt.
+The old `producer` directory is retained as a migration reference and is not published.
+
+From this directory, with JDK 17+ and Android SDK 37:
 
 ```sh
-./gradlew :producer:testDebugUnitTest
-./gradlew :producer:connectedDebugAndroidTest
+./gradlew :transfer:testDebugUnitTest :transfer:lintDebug
+./gradlew :transfer:publishReleasePublicationToVerificationRepository
+./gradlew :transfer:dokkaGenerate
 ```
 
-Device tests require H.264, HEVC and camera support; verified on Pixel 5a / Android 14.
+The local Maven repository is written to `build/maven-repository`. JitPack uses the
+same standard Maven publication through the repository's `jitpack.yml`.

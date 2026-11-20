@@ -160,8 +160,13 @@ struct HistoryView: View {
                     Text("\(segment.evaluatedFrames)/\(segment.inputFrames)").foregroundStyle(.secondary)
                 }.font(.callout)
             }
-            Divider()
-            Text(language.text("Notes")).font(.headline)
+if let performance = run.senderPerformance, !performance.isEmpty {
+    SenderPerformanceView(items:performance,language:language)
+} else if run.sourceKind == "upload" {
+    Text(language.text("Sender did not include performance measurements.")).font(.caption).foregroundStyle(.secondary)
+}
+Divider()
+Text(language.text("Notes")).font(.headline)
             TextEditor(text: $notes).font(.body).frame(height: 100)
                 .overlay(RoundedRectangle(cornerRadius: 5).stroke(.quaternary))
             HStack {

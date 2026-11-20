@@ -109,7 +109,10 @@ struct UploadEvaluation {
             inputFrames: ref.frameCount * manifest.variants.count, evaluatedFrames: points.count, completeEvaluation: failure == nil,
             stoppedByUser: false, mixerQueueDropped: 0, mixerUndelivered: 0, segments: segments, scores: points,
             sourceKind: "upload", sourceName: "Device · \(ref.source) · \(manifest.runId.prefix(8))", createdAt: Date(),
-            format: "\(ref.width)×\(ref.height) · \(ref.fpsNumerator) fps · \(ref.colorRange) \(ref.colorMatrix)", failure: failure)
+            format: "\(ref.width)×\(ref.height) · \(ref.fpsNumerator) fps · \(ref.colorRange) \(ref.colorMatrix)", failure: failure, senderPerformance: manifest.variants.compactMap { variant in
+                guard let performance = variant.performance else { return nil }
+                return SenderPerformance(file:variant.file,settings:BenchmarkSettings(codec:variant.codec == "h264" ? .h264 : .hevc,bitrate:variant.targetBitrate),metrics:performance,codecName:variant.codecName,hardwareAccelerated:variant.hardwareAccelerated,actualBitrate:variant.actualBitrate)
+            })
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(run).write(to: output.appendingPathComponent("live-summary.json"), options: .atomic)
         try encoder.encode(RunMetadata(run: run)).write(to: output.appendingPathComponent("history.json"), options: .atomic)

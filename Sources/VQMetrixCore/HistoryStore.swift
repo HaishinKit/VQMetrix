@@ -155,6 +155,7 @@ package enum ReportRenderer {
         let rows = run.segments.map { segment in
             "<tr><td>\(segment.index + 1)</td><td>\(escape(segment.settings.codec.rawValue))</td><td>\(number(Double(segment.settings.bitrate) / 1_000_000)) Mbps</td><td>\(number(segment.meanVMAF))</td><td>\(segment.evaluatedFrames) / \(segment.inputFrames)</td><td>\(max(0, segment.inputFrames - segment.evaluatedFrames))</td></tr>"
         }.joined()
+        let performance = SenderPerformance.html(run.senderPerformance ?? [], language:language)
         let notes = annotation.notes.isEmpty ? "" : "<h2>\(t("Notes"))</h2><div class=\"notes\">\(escape(annotation.notes))</div>"
         let failure = run.failure.map { "<p class=\"warning\">\(escape(language.text($0)))</p>" } ?? ""
         let dateText = date.formatted(.dateTime.year().month().day().hour().minute().second().locale(language.locale))
@@ -168,7 +169,7 @@ package enum ReportRenderer {
         <div class="metrics"><div class="metric">\(t("Mean VMAF"))<strong>\(number(mean))</strong></div><div class="metric">\(t("Minimum VMAF"))<strong>\(number(minimum))</strong></div><div class="metric">\(t("Evaluated frames"))<strong>\(run.evaluatedFrames) / \(run.inputFrames)</strong></div><div class="metric">\(t("Skipped frames"))<strong>\(max(0, run.inputFrames - run.evaluatedFrames))</strong></div></div>
         <h2>\(t("VMAF timeline"))</h2><svg viewBox="0 0 900 260" role="img" aria-label="\(t("VMAF timeline"))">\(grid)\(paths)<text x="45" y="244">\(number(first))</text><text x="855" y="244" text-anchor="end">\(number(last))</text></svg><p class="meta">\(t("Time (seconds)"))</p>
         <h2>\(t("Encoding settings by segment"))</h2><table><thead><tr><th>\(t("Segment"))</th><th>\(t("Codec"))</th><th>\(t("Target bitrate"))</th><th>\(t("Mean VMAF"))</th><th>\(t("Evaluated frames"))</th><th>\(t("Skipped frames"))</th></tr></thead><tbody>\(rows)</tbody></table>
-        \(notes)<p class="warning">\(t("Scores describe evaluated frames only. Missing frames and temporal gaps affect interpretation."))</p><p class="meta">\(t("Encoding and decoding run on this device. Network delivery is excluded. Skipped evaluation frames are recorded."))</p><p class="meta">\(t("Run ID")): \(escape(id))</p></main></html>
+        \(performance)\(notes)<p class="warning">\(t("Scores describe evaluated frames only. Missing frames and temporal gaps affect interpretation."))</p><p class="meta">\(t("Encoding and decoding run on this device. Network delivery is excluded. Skipped evaluation frames are recorded."))</p><p class="meta">\(t("Run ID")): \(escape(id))</p></main></html>
         """
     }
 }

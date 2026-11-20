@@ -21,18 +21,16 @@ def system_library?(path)
   path.start_with?('/usr/lib/', '/System/Library/')
 end
 
-version = ENV.fetch('VQMETRIX_VERSION', '0.1.0')
+version = ENV.fetch('VQMETRIX_VERSION', File.read(File.join(ROOT, 'VERSION')).strip)
 abort 'Invalid app version' unless version.match?(/\A[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?\z/)
 short_version = version.split('-').first
 puts capture('swift', 'build', '-c', 'release')
 bin = capture('swift', 'build', '-c', 'release', '--show-bin-path').lines.last.strip
-cli = File.join(bin, 'vqmetrix')
 gui = File.join(bin, 'VQMetrixApp')
-vmaf = dependencies(cli).find { |path| File.basename(path).match?(/\Alibvmaf\..*dylib\z/) }
+vmaf = dependencies(gui).find { |path| File.basename(path).match?(/\Alibvmaf\..*dylib\z/) }
 abort 'Missing libvmaf' unless vmaf && File.file?(vmaf)
-extra = dependencies(cli).reject { |path| system_library?(path) || path == vmaf }
+extra = dependencies(gui).reject { |path| system_library?(path) || path == vmaf }
 extra += dependencies(vmaf).reject { |path| system_library?(path) || File.basename(path) == File.basename(vmaf) }
-extra += dependencies(gui).reject { |path| system_library?(path) || path == vmaf }
 abort "Additional dependencies need bundling and license handling: #{extra.join(', ')}" unless extra.empty?
 vmaf_real = File.realpath(vmaf)
 vmaf_license = File.join(File.expand_path('..', File.dirname(vmaf_real)), 'LICENSE')
@@ -41,10 +39,9 @@ app = File.join(ROOT, '.build/VQMetrix.app')
 FileUtils.rm_rf(app)
 contents = File.join(app, 'Contents')
 resources = File.join(contents, 'Resources')
-helpers = File.join(contents, 'Helpers')
-FileUtils.mkdir_p([resources, File.join(contents, 'MacOS'), File.join(helpers, 'lib'), File.join(resources, 'Licenses')])
+frameworks = File.join(contents, 'Frameworks')
+FileUtils.mkdir_p([resources, File.join(contents, 'MacOS'), frameworks, File.join(resources, 'Licenses')])
 FileUtils.cp(gui, File.join(contents, 'MacOS/VQMetrix'))
-FileUtils.cp(cli, File.join(helpers, 'vqmetrix'))
 resource_bundle = File.join(bin, 'VQMetrix_VQMetrixCore.bundle')
 abort 'Missing localization resources' unless File.directory?(resource_bundle)
 FileUtils.cp_r(resource_bundle, resources)
@@ -55,11 +52,10 @@ Dir[File.join(bin, 'ZIPFoundation*.bundle/PrivacyInfo.xcprivacy')].each { |notic
   FileUtils.mkdir_p(folder)
   File.write(File.join(folder, 'InfoPlist.strings'), '"NSCameraUsageDescription" = ' + JSON.generate(message) + ";\n")
 end
-library = File.join(helpers, 'lib', File.basename(vmaf))
+library = File.join(frameworks, File.basename(vmaf))
 FileUtils.cp(vmaf_real, library)
 capture('install_name_tool', '-id', "@loader_path/#{File.basename(vmaf)}", library)
-capture('install_name_tool', '-change', vmaf, "@executable_path/lib/#{File.basename(vmaf)}", File.join(helpers, 'vqmetrix'))
-capture('install_name_tool', '-change', vmaf, "@executable_path/../Helpers/lib/#{File.basename(vmaf)}", File.join(contents, 'MacOS/VQMetrix'))
+capture('install_name_tool', '-change', vmaf, "@executable_path/../Frameworks/#{File.basename(vmaf)}", File.join(contents, 'MacOS/VQMetrix'))
 {
   'VQMetrix.txt' => File.join(ROOT, 'LICENSE.md'),
   'HaishinKit.txt' => File.expand_path('../HaishinKit.swift/LICENSE.md', ROOT),
@@ -77,7 +73,7 @@ FileUtils.mkdir_p(iconset)
   end
 end
 capture('iconutil', '-c', 'icns', iconset, '-o', File.join(resources, 'AppIcon.icns'))
-minimum = [gui, cli, vmaf_real].map { |path| capture('vtool', '-show-build', path)[/\bminos\s+(\S+)/, 1] }.compact
+minimum = [gui, vmaf_real].map { |path| capture('vtool', '-show-build', path)[/\bminos\s+(\S+)/, 1] }.compact
 minimum << '13.0'
 minimum = minimum.max_by { |version| version.split('.').map(&:to_i) }
 File.write(File.join(contents, 'Info.plist'), <<~PLIST)
@@ -104,7 +100,7 @@ File.write(File.join(contents, 'Info.plist'), <<~PLIST)
   <key>NSBonjourServices</key><array><string>_vqmetrix._tcp</string></array>
   </dict></plist>
 PLIST
-(Dir[File.join(resources, '*.bundle')] + [library, File.join(helpers, 'vqmetrix'), File.join(contents, 'MacOS/VQMetrix'), app]).each do |path|
+(Dir[File.join(resources, '*.bundle')] + [library, File.join(contents, 'MacOS/VQMetrix'), app]).each do |path|
   capture('codesign', '--force', '--sign', '-', path)
 end
 capture('codesign', '--verify', '--deep', '--strict', app)

@@ -6,7 +6,6 @@ let package = Package(
     defaultLocalization: "en",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "vqmetrix", targets: ["VQMetrixCLI"]),
         .executable(name: "VQMetrixApp", targets: ["VQMetrixApp"])
     ],
     dependencies: [
@@ -17,11 +16,8 @@ let package = Package(
     targets: [
         .systemLibrary(name: "CVMAF", pkgConfig: "libvmaf", providers: [.brew(["libvmaf"]) ]),
         .target(name: "VQMetrixCore", dependencies: [.product(name: "HaishinKit", package: "HaishinKit.swift"), "CVMAF", "ZIPFoundation"], resources: [.process("Resources")]),
-        .executableTarget(name: "VQMetrixCLI", dependencies: [
-            .product(name: "HaishinKit", package: "HaishinKit.swift"), "CVMAF", "VQMetrixCore"
-        ]),
         .executableTarget(name: "VQMetrixApp", dependencies: ["VQMetrixCore"]),
-        .testTarget(name: "VQMetrixTests", dependencies: ["VQMetrixCLI", "VQMetrixCore"])
+        .testTarget(name: "VQMetrixTests", dependencies: ["VQMetrixCore"])
     ],
     swiftLanguageModes: [.v6]
 )

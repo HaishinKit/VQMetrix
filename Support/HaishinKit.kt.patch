@@ -1,5 +1,5 @@
 diff --git a/app/build.gradle.kts b/app/build.gradle.kts
-index 217e2424..e4c5f44a 100644
+index 217e2424..f176310f 100644
 --- a/app/build.gradle.kts
 +++ b/app/build.gradle.kts
 @@ -13,7 +13,8 @@ android {
@@ -8,7 +8,7 @@ index 217e2424..e4c5f44a 100644
          versionCode = 1
 -        versionName = "1.0"
 +        versionName = providers.gradleProperty("appVersionName").orElse("1.0").get()
-+        buildConfigField("boolean", "VQMETRIX_AVAILABLE", (rootProject.findProject(":vqmetrix-producer") != null).toString())
++        buildConfigField("boolean", "VQMETRIX_AVAILABLE", (rootProject.findProject(":vqmetrix-example") != null).toString())
  
          testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
          vectorDrawables { useSupportLibrary = true }
@@ -28,7 +28,7 @@ index 217e2424..e4c5f44a 100644
  }
  
  dependencies {
-+    if (rootProject.findProject(":vqmetrix-producer") != null) {
++    if (rootProject.findProject(":vqmetrix-example") != null) {
 +        implementation(project(":vqmetrix-example"))
 +    }
      implementation(project(":haishinkit"))
@@ -201,7 +201,7 @@ index 0b8d94fa..4b93c0de 100644
              label = { Text("Publish URL (RTMP / SRT / WHIP)") },
 diff --git a/app/src/main/java/com/haishinkit/app/QualityCapture.kt b/app/src/main/java/com/haishinkit/app/QualityCapture.kt
 new file mode 100644
-index 00000000..e40f073e
+index 00000000..de3850b8
 --- /dev/null
 +++ b/app/src/main/java/com/haishinkit/app/QualityCapture.kt
 @@ -0,0 +1,27 @@
@@ -211,7 +211,7 @@ index 00000000..e40f073e
 +import android.widget.Toast
 +import com.haishinkit.screen.Screen
 +
-+/** Keeps the optional VQMetrix checkout out of the normal Example build. */
++/** Bridges source screens to the Example capture module without changing library code. */
 +internal object QualityCapture {
 +    fun save(
 +        context: Context,
@@ -254,49 +254,65 @@ index 00000000..8b2fe07f
 +</resources>
 diff --git a/app/vqmetrix/README.md b/app/vqmetrix/README.md
 new file mode 100644
-index 00000000..64a86344
+index 00000000..9805fb9b
 --- /dev/null
 +++ b/app/vqmetrix/README.md
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,31 @@
 +# 📊 VQMetrix Example
 +
-+Optional UI for the [VQMetrix](https://github.com/HaishinKit/VQMetrix) Android library.
-+Place VQMetrix beside HaishinKit.kt, or set `-PvqmetrixDir=/path/to/VQMetrix/Android/producer`.
++Camera and MediaProjection sample capture with the standalone
++[VQMetrix transfer library](https://github.com/HaishinKit/VQMetrix/tree/main/Android).
 +
 +## 🚀 Use
 +
-+Build `:app:assembleDebug`. Camera Publish and MediaProjection offer **Save sample**
-+from their existing mixer composition. Preferences → VQMetrix configures duration,
-+codec and bitrates and lets you share or upload saved packages. Capture is limited
-+to 15 fps within 640×480; it preserves aspect ratio and records observed readback times.
-+The source must keep running while samples are acquired. Source shutdown cancels an
-+unfinished capture; re-encoding can finish after capture completes.
++Build `:app:assembleDebug`. Both source screens offer **Save sample** from their existing
++mixer composition. Preferences → VQMetrix configures duration, codec and bitrates and
++lets you share or upload packages. Capture is 15 fps within 640×480, preserving aspect
++ratio and recording observed readback times. Source shutdown cancels unfinished sampling;
++re-encoding can finish after sampling completes.
++
++Select the Mac through Bonjour and enter its 4-digit connection code. HTTP is for trusted
++LAN use and does not encrypt video or codes. The Mac evaluates packages and saves reports.
++
++## 📦 Dependency
++
++The module consumes `com.github.HaishinKit.VQMetrix:transfer:1.0.0` from JitPack.
++No neighboring VQMetrix checkout is required. For development use
++`-PvqmetrixTransferDir=/path/to/VQMetrix/Android/transfer`; a test Maven repository can be
++selected with `-PvqmetrixRepository=/path/to/repository`.
 +
 +## 📚 Scope
 +
-+UI and lifecycle hooks belong to this Example. Capture, exact-frame replay through
-+Android MediaCodec, ZIP packaging, upload and Bonjour discovery belong to VQMetrix.
-+No HaishinKit library changes are required. The feature is omitted without VQMetrix.
++UI, capture and replay encoding live here. Upload and Bonjour discovery live in the
++external library. HaishinKit library code is unchanged. Each variant records timings,
++whole-app CPU time, sampled PSS memory and OS thermal state. These are offline replay
++measurements, not hardware utilization or a live-stream stability guarantee.
 +
-+This evaluates re-encoding of sampled composition, rather than the original live
-+stream or network delivery. See VQMetrix's transfer and user guides for details.
-+HTTP is limited to trusted local networks; video and tokens are unencrypted over HTTP.
-+The macOS upload receiver is not implemented yet.
++See the [API reference and guides](https://haishinkit.github.io/VQMetrix/) for details.
 diff --git a/app/vqmetrix/build.gradle.kts b/app/vqmetrix/build.gradle.kts
 new file mode 100644
-index 00000000..649ff7a9
+index 00000000..cf8fab26
 --- /dev/null
 +++ b/app/vqmetrix/build.gradle.kts
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,42 @@
 +plugins {
 +    alias(libs.plugins.androidLibrary)
 +    alias(libs.plugins.jetbrainsKotlinAndroid)
 +}
 +
++val captureVersion = providers.gradleProperty("appVersionName").orElse("1.0.0").get()
++val transferVersion = providers.gradleProperty("vqmetrixTransferVersion").orElse("1.0.0").get()
++
 +android {
 +    namespace = "com.haishinkit.app.vqmetrix"
 +    compileSdk = 37
-+    defaultConfig { minSdk = 29 }
++    defaultConfig {
++        minSdk = 29
++        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
++        buildConfigField("String", "VQMETRIX_VERSION", "\"$captureVersion\"")
++    }
++    buildFeatures { buildConfig = true }
++    testOptions { unitTests.isIncludeAndroidResources = true }
 +    compileOptions {
 +        sourceCompatibility = JavaVersion.VERSION_17
 +        targetCompatibility = JavaVersion.VERSION_17
@@ -305,12 +321,195 @@ index 00000000..649ff7a9
 +}
 +
 +dependencies {
-+    implementation(project(":vqmetrix-producer"))
++    if (rootProject.findProject(":vqmetrix-transfer") != null) {
++        implementation(project(":vqmetrix-transfer"))
++    } else {
++        implementation(
++            "com.github.HaishinKit.VQMetrix:transfer:$transferVersion",
++        )
++    }
++    testImplementation(libs.junit)
++    testImplementation(libs.robolectric)
++    androidTestImplementation(libs.androidx.junit)
++    androidTestImplementation(libs.androidx.test.runner)
 +    implementation(project(":haishinkit"))
 +    implementation(libs.androidx.appcompat)
 +    implementation(libs.androidx.lifecycle.runtime.ktx)
 +    implementation(libs.kotlinx.coroutines.core)
 +}
+diff --git a/app/vqmetrix/src/androidTest/java/com/haishinkit/vqmetrix/BatchDeviceTest.kt b/app/vqmetrix/src/androidTest/java/com/haishinkit/vqmetrix/BatchDeviceTest.kt
+new file mode 100644
+index 00000000..2311b12e
+--- /dev/null
++++ b/app/vqmetrix/src/androidTest/java/com/haishinkit/vqmetrix/BatchDeviceTest.kt
+@@ -0,0 +1,149 @@
++package com.haishinkit.vqmetrix
++
++import android.Manifest
++import android.content.Intent
++import android.media.MediaExtractor
++import android.media.MediaFormat
++import androidx.test.core.app.ActivityScenario
++import androidx.test.ext.junit.runners.AndroidJUnit4
++import androidx.test.platform.app.InstrumentationRegistry
++import kotlinx.coroutines.runBlocking
++import org.json.JSONObject
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertNotNull
++import org.junit.Assert.assertNull
++import org.junit.Assert.assertTrue
++import org.junit.Test
++import org.junit.runner.RunWith
++import java.io.File
++import java.util.zip.ZipFile
++
++@RunWith(AndroidJUnit4::class)
++class BatchDeviceTest {
++    @Test
++    fun h264AndHevcProduceExactFrameMapsAndChecksummedPackages() =
++        runBlocking {
++            val context = InstrumentationRegistry.getInstrumentation().targetContext
++            for (codec in listOf("h264", "hevc")) {
++                val batch = BatchPipeline(context).create(BatchConfig(320, 180, 15, 1, listOf(300_000, 800_000), codec, false), {}, {})
++                try {
++                    val manifest = JSONObject(File(batch.directory, "manifest.json").readText())
++                    assertEquals(15, manifest.getJSONObject("reference").getInt("frameCount"))
++                    assertEquals(2, manifest.getJSONArray("variants").length())
++                    val performance = manifest.getJSONArray("variants").getJSONObject(0).getJSONObject("performance")
++                    assertEquals("offlineReplay", performance.getString("mode"))
++                    assertEquals(15, performance.getInt("frameCount"))
++                    assertEquals(15, performance.getJSONArray("frameTimings").length())
++                    assertTrue(performance.getDouble("wallTimeMs") > 0)
++                    assertTrue(performance.getDouble("throughputFps") > 0)
++                    assertTrue(performance.getDouble("p95LatencyMs") >= 0)
++                    assertTrue(performance.getDouble("appCpuCores") >= 0)
++                    assertTrue(performance.getJSONArray("samples").length() >= 2)
++                    val files = manifest.getJSONArray("files")
++                    for (index in 0 until files.length()) {
++                        val description = files.getJSONObject(index)
++                        val file = File(batch.directory, description.getString("path"))
++                        assertEquals(description.getLong("size"), file.length())
++                        assertEquals(description.getString("sha256"), BatchPipeline.sha256(file))
++                    }
++                    ZipFile(batch.archive).use { zip ->
++                        assertNotNull(zip.getEntry("manifest.json"))
++                        assertNotNull(zip.getEntry("reference.y4m"))
++                        assertNotNull(zip.getEntry("$codec-300000.mp4"))
++                    }
++                    for (rate in listOf(300_000, 800_000)) {
++                        val extractor = MediaExtractor()
++                        try {
++                            extractor.setDataSource(File(batch.directory, "$codec-$rate.mp4").path)
++                            assertEquals(1, extractor.trackCount)
++                            val format = extractor.getTrackFormat(0)
++                            assertEquals(
++                                if (codec == "h264") MediaFormat.MIMETYPE_VIDEO_AVC else MediaFormat.MIMETYPE_VIDEO_HEVC,
++                                format.getString(MediaFormat.KEY_MIME),
++                            )
++                            extractor.selectTrack(0)
++                            var count = 0
++                            while (extractor.sampleTime >= 0) {
++                                assertEquals(VariantEncoder.pts(count, 15), extractor.sampleTime)
++                                count++
++                                if (!extractor.advance()) break
++                            }
++                            assertEquals(15, count)
++                        } finally {
++                            extractor.release()
++                        }
++                    }
++                } finally {
++                    batch.directory.deleteRecursively()
++                }
++            }
++        }
++
++    @Test
++    fun mixerSnapshotsUsePublicScreenApiAndEncodeWithoutSdkChanges() =
++        runBlocking {
++            val instrumentation = InstrumentationRegistry.getInstrumentation()
++            val context = instrumentation.targetContext
++            ActivityScenario.launch<CaptureTestActivity>(Intent(context, CaptureTestActivity::class.java)).use { scenario ->
++                lateinit var screen: com.haishinkit.screen.Screen
++                scenario.onActivity {
++                    screen =
++                        com.haishinkit.screen.Screen.createOpenGL(it).apply {
++                            frame = android.graphics.Rect(0, 0, 320, 180)
++                            addChild(
++                                com.haishinkit.screen.ImageScreenObject().apply {
++                                    bitmap = android.graphics.Bitmap.createBitmap(320, 180, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.WHITE) }
++                                    frame = android.graphics.Rect(0, 0, 320, 180)
++                                },
++                            )
++                        }
++                }
++                kotlinx.coroutines.delay(300)
++                try {
++                    val batch = BatchPipeline(context).create(BatchConfig(320, 180, 15, 1, listOf(300_000), "h264", false), {}, {}, ScreenReference(screen, "projection"))
++                    try {
++                        val manifest = JSONObject(File(batch.directory, "manifest.json").readText())
++                        val reference = manifest.getJSONObject("reference")
++                        assertEquals("mixer-projection", reference.getString("source"))
++                        assertEquals(15, reference.getInt("frameCount"))
++                        assertEquals("bt709", reference.getString("colorMatrix"))
++                        Y4mReader(File(batch.directory, "reference.y4m"), ReferenceSpec(320, 180, 15, 15)).use { reader ->
++                            val frame = reader.next()!!
++                            assertTrue("Expected opaque white mixer content; got ${frame[0].toInt() and 255}", (frame[0].toInt() and 255) in 233..235)
++                            assertEquals(128, frame[320 * 180].toInt() and 255)
++                        }
++                    } finally {
++                        batch.directory.deleteRecursively()
++                    }
++                } finally {
++                    scenario.onActivity { screen.dispose() }
++                }
++            }
++        }
++
++    @Test
++    fun cameraReferenceContainsAllCapturedPlanesAndTimestamps() =
++        runBlocking {
++            val instrumentation = InstrumentationRegistry.getInstrumentation()
++            val context = instrumentation.targetContext
++            instrumentation.uiAutomation.grantRuntimePermission(context.packageName, Manifest.permission.CAMERA)
++            val intent = Intent(context, CaptureTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
++            ActivityScenario.launch<CaptureTestActivity>(intent).use {
++                val file = File(context.cacheDir, "camera-reference.y4m")
++                try {
++                    val result =
++                        CameraReference(
++                            context,
++                        ).record(file, BatchConfig(640, 480, 15, 1, listOf(500_000), "h264", true)) { _, _, _ -> }
++                    assertEquals(result.spec.frames, result.captureTimestampsNs.size)
++                    assertTrue(result.captureTimestampsNs.zipWithNext().all { (a, b) -> b > a })
++                    Y4mReader(file, result.spec).use { reader ->
++                        repeat(result.spec.frames) { assertEquals(result.spec.frameBytes, reader.next()!!.size) }
++                        assertNull(reader.next())
++                    }
++                } finally {
++                    file.delete()
++                }
++            }
++        }
++}
+diff --git a/app/vqmetrix/src/debug/AndroidManifest.xml b/app/vqmetrix/src/debug/AndroidManifest.xml
+new file mode 100644
+index 00000000..d49d1e48
+--- /dev/null
++++ b/app/vqmetrix/src/debug/AndroidManifest.xml
+@@ -0,0 +1 @@
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application><activity android:name="com.haishinkit.vqmetrix.CaptureTestActivity" android:exported="false" /></application></manifest>
+\ No newline at end of file
+diff --git a/app/vqmetrix/src/debug/java/com/haishinkit/vqmetrix/CaptureTestActivity.kt b/app/vqmetrix/src/debug/java/com/haishinkit/vqmetrix/CaptureTestActivity.kt
+new file mode 100644
+index 00000000..66ee3896
+--- /dev/null
++++ b/app/vqmetrix/src/debug/java/com/haishinkit/vqmetrix/CaptureTestActivity.kt
+@@ -0,0 +1,4 @@
++package com.haishinkit.vqmetrix
++
++/** Foreground host for hardware instrumentation tests; excluded from release AARs. */
++class CaptureTestActivity : android.app.Activity()
 diff --git a/app/vqmetrix/src/main/AndroidManifest.xml b/app/vqmetrix/src/main/AndroidManifest.xml
 new file mode 100644
 index 00000000..1dc5f54e
@@ -923,6 +1122,1008 @@ index 00000000..b430c488
 +
 +/** Keeps the producer's shared files separate from the host application's provider. */
 +class VQMetrixFileProvider : FileProvider()
+diff --git a/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/BatchPipeline.kt b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/BatchPipeline.kt
+new file mode 100644
+index 00000000..e01f79ba
+--- /dev/null
++++ b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/BatchPipeline.kt
+@@ -0,0 +1,203 @@
++package com.haishinkit.vqmetrix
++
++import android.content.Context
++import android.graphics.Bitmap
++import android.os.Build
++import android.os.StatFs
++import com.haishinkit.app.vqmetrix.BuildConfig
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.currentCoroutineContext
++import kotlinx.coroutines.ensureActive
++import kotlinx.coroutines.withContext
++import org.json.JSONArray
++import org.json.JSONObject
++import java.io.File
++import java.security.MessageDigest
++import java.time.Instant
++import java.util.UUID
++import java.util.zip.ZipEntry
++import java.util.zip.ZipOutputStream
++
++data class BatchProgress(val stage: String, val current: Int, val total: Int, val detail: String = "")
++
++class BatchPipeline(private val context: Context) {
++    suspend fun create(
++        config: BatchConfig,
++        progress: (BatchProgress) -> Unit,
++        preview: (Bitmap) -> Unit,
++        screenReference: ScreenReference? = null,
++    ): BatchArchive =
++        withContext(Dispatchers.IO) {
++            val spec = ReferenceSpec(config.width, config.height, config.fps, config.fps * config.seconds)
++            val expectedBytes =
++                spec.frameBytes.toLong() * spec.frames * 2 +
++                    config.bitrates.sumOf { it.toLong() / 8 * config.seconds } + 32 * 1024 * 1024
++            check(StatFs(context.filesDir.path).availableBytes > expectedBytes) { "Not enough free storage" }
++            val id = UUID.randomUUID().toString()
++            val directory = File(context.filesDir, "runs/$id").apply { check(mkdirs()) }
++            val reference = File(directory, "reference.y4m")
++            val started = Instant.now().toString()
++
++            fun onFrame(
++                index: Int,
++                actual: ReferenceSpec,
++                frame: ByteArray,
++            ) {
++                progress(BatchProgress("reference", index, actual.frames))
++                if (index == 1 || index % maxOf(1, actual.fps / 5) == 0) preview(YuvImages.preview(frame, actual))
++            }
++            try {
++                val captured =
++                    if (screenReference != null) {
++                        screenReference.record(reference, config, ::onFrame)
++                    } else if (config.camera) {
++                        CameraReference(context).record(reference, config, ::onFrame)
++                    } else {
++                        Y4mWriter(reference, spec).use { writer ->
++                            for (index in 0 until spec.frames) {
++                                currentCoroutineContext().ensureActive()
++                                val frame = TestPattern.frame(spec, index)
++                                writer.append(frame)
++                                onFrame(index + 1, spec, frame)
++                            }
++                        }
++                        CapturedReference(spec, "test-pattern-v1", emptyList(), "limited", "bt709")
++                    }
++                val variants = ArrayList<EncodedVariant>()
++                for (bitrate in config.bitrates) {
++                    currentCoroutineContext().ensureActive()
++                    val file = File(directory, "${config.codec}-$bitrate.mp4")
++                    variants.add(
++                        VariantEncoder(context).encode(reference, captured, file, bitrate, config.codec) {
++                            progress(BatchProgress("encoding", it, captured.spec.frames, "${config.codec} · ${bitrate / 1000} kbps"))
++                        },
++                    )
++                }
++                progress(BatchProgress("packaging", 0, 1))
++                val frameMap =
++                    JSONObject().apply {
++                        put("referencePtsUs", JSONArray((0 until captured.spec.frames).map { VariantEncoder.pts(it, captured.spec.fps) }))
++                        put("captureTimestampsNs", JSONArray(captured.captureTimestampsNs))
++                        put(
++                            "variants",
++                            JSONObject().apply {
++                                variants.forEach { put(it.file.name, JSONArray(it.outputPtsUs)) }
++                            },
++                        )
++                    }
++                val mapFile = File(directory, "frame-map.json").apply { writeText(frameMap.toString(2)) }
++                val files = listOf(reference, mapFile) + variants.map { it.file }
++                val manifest =
++                    JSONObject().apply {
++                        put("schema", "vqmetrix.capture.v1")
++                        put("schemaVersion", 1)
++                        put("runId", id)
++                        put("createdAt", started)
++                        put(
++                            "device",
++                            JSONObject().apply {
++                                put("manufacturer", Build.MANUFACTURER)
++                                put("model", Build.MODEL)
++                                put("androidApi", Build.VERSION.SDK_INT)
++                                put("appVersion", BuildConfig.VQMETRIX_VERSION)
++                            },
++                        )
++                        put(
++                            "reference",
++                            JSONObject().apply {
++                                put("file", reference.name)
++                                put("source", captured.source)
++                                put("width", captured.spec.width)
++                                put("height", captured.spec.height)
++                                put("fpsNumerator", captured.spec.fps)
++                                put("fpsDenominator", 1)
++                                put("frameCount", captured.spec.frames)
++                                put("pixelFormat", "yuv420p")
++                                put("bitDepth", 8)
++                                put("colorRange", captured.range)
++                                put("colorMatrix", captured.matrix)
++                                put("sensorOrientationDegrees", captured.sensorOrientation)
++                                put("frameMap", mapFile.name)
++                            },
++                        )
++                        put(
++                            "variants",
++                            JSONArray().apply {
++                                variants.forEach { variant ->
++                                    put(
++                                        JSONObject().apply {
++                                            put("file", variant.file.name)
++                                            put("codec", variant.codec)
++                                            put("targetBitrate", variant.bitrate)
++                                            put("actualBitrate", variant.encodedBytes * 8.0 * captured.spec.fps / captured.spec.frames)
++                                            put("codecName", variant.codecName)
++                                            put("performance", variant.performance)
++                                            put("hardwareAccelerated", variant.hardwareAccelerated)
++                                            put("frameCount", variant.outputPtsUs.size)
++                                            put("width", captured.spec.width)
++                                            put("height", captured.spec.height)
++                                        },
++                                    )
++                                }
++                            },
++                        )
++                        put(
++                            "files",
++                            JSONArray().apply {
++                                files.forEach { file ->
++                                    put(
++                                        JSONObject().apply {
++                                            put("path", file.name)
++                                            put("size", file.length())
++                                            put("sha256", sha256(file))
++                                        },
++                                    )
++                                }
++                            },
++                        )
++                    }
++                val manifestFile = File(directory, "manifest.json").apply { writeText(manifest.toString(2)) }
++                val temporary = File(directory, "batch.zip.part")
++                val archive = File(directory, "batch.zip")
++                ZipOutputStream(temporary.outputStream().buffered()).use { zip ->
++                    zip.setLevel(1)
++                    for (file in listOf(manifestFile) + files) {
++                        currentCoroutineContext().ensureActive()
++                        zip.putNextEntry(ZipEntry(file.name).apply { time = 0 })
++                        file.inputStream().buffered().use { input ->
++                            val buffer = ByteArray(64 * 1024)
++                            while (true) {
++                                currentCoroutineContext().ensureActive()
++                                val count = input.read(buffer)
++                                if (count < 0) break
++                                zip.write(buffer, 0, count)
++                            }
++                        }
++                        zip.closeEntry()
++                    }
++                }
++                check(temporary.renameTo(archive)) { "Could not finalize archive" }
++                progress(BatchProgress("packaging", 1, 1))
++                BatchArchive(id, directory, archive)
++            } catch (failure: Throwable) {
++                File(directory, "batch.zip.part").delete()
++                File(directory, "failure.txt").writeText(failure.message ?: failure.javaClass.simpleName)
++                throw failure
++            }
++        }
++
++    companion object {
++        fun sha256(file: File): String {
++            val digest = MessageDigest.getInstance("SHA-256")
++            file.inputStream().buffered().use { input ->
++                val bytes = ByteArray(64 * 1024)
++                while (true) {
++                    val count = input.read(bytes)
++                    if (count < 0) break
++                    digest.update(bytes, 0, count)
++                }
++            }
++            return digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
++        }
++    }
++}
+diff --git a/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/CameraReference.kt b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/CameraReference.kt
+new file mode 100644
+index 00000000..1db167f2
+--- /dev/null
++++ b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/CameraReference.kt
+@@ -0,0 +1,172 @@
++package com.haishinkit.vqmetrix
++
++import android.annotation.SuppressLint
++import android.content.Context
++import android.graphics.ImageFormat
++import android.hardware.camera2.CameraCaptureSession
++import android.hardware.camera2.CameraCharacteristics
++import android.hardware.camera2.CameraDevice
++import android.hardware.camera2.CameraManager
++import android.hardware.camera2.CaptureRequest
++import android.media.ImageReader
++import android.os.Handler
++import android.os.HandlerThread
++import kotlinx.coroutines.CompletableDeferred
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.suspendCancellableCoroutine
++import kotlinx.coroutines.withContext
++import kotlinx.coroutines.withTimeout
++import java.io.File
++import java.util.concurrent.atomic.AtomicBoolean
++import kotlin.coroutines.resume
++import kotlin.coroutines.resumeWithException
++
++data class CapturedReference(
++    val spec: ReferenceSpec,
++    val source: String,
++    val captureTimestampsNs: List<Long>,
++    val range: String,
++    val matrix: String,
++    val sensorOrientation: Int = 0,
++)
++
++class CameraReference(private val context: Context) {
++    @SuppressLint("MissingPermission")
++    suspend fun record(
++        file: File,
++        config: BatchConfig,
++        progress: (Int, ReferenceSpec, ByteArray) -> Unit,
++    ): CapturedReference =
++        withContext(Dispatchers.IO) {
++            val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
++            val id =
++                manager.cameraIdList.firstOrNull {
++                    manager.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK
++                } ?: manager.cameraIdList.firstOrNull() ?: error("No camera is available")
++            val characteristics = manager.getCameraCharacteristics(id)
++            val sizes =
++                checkNotNull(characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP))
++                    .getOutputSizes(ImageFormat.YUV_420_888)
++            val size =
++                sizes.filter { it.width <= config.width && it.height <= config.height && it.width % 2 == 0 && it.height % 2 == 0 }
++                    .maxByOrNull { it.width * it.height } ?: error("No compatible YUV camera size")
++            val spec = ReferenceSpec(size.width, size.height, config.fps, config.fps * config.seconds)
++            val thread = HandlerThread("VQMetrix-camera").apply { start() }
++            val handler = Handler(thread.looper)
++            val reader = ImageReader.newInstance(size.width, size.height, ImageFormat.YUV_420_888, 3)
++            val completion = CompletableDeferred<CapturedReference>()
++            val finished = AtomicBoolean(false)
++            val timestamps = ArrayList<Long>()
++            val writer = Y4mWriter(file, spec, "unspecified")
++            var device: CameraDevice? = null
++            var session: CameraCaptureSession? = null
++            reader.setOnImageAvailableListener({ source ->
++                val image =
++                    try {
++                        source.acquireNextImage()
++                    } catch (_: IllegalStateException) {
++                        null
++                    }
++                image?.use {
++                    if (finished.get()) return@use
++                    try {
++                        require(it.cropRect.width() == spec.width && it.cropRect.height() == spec.height) { "Camera crop changed" }
++                        if (timestamps.isNotEmpty()) require(it.timestamp > timestamps.last()) { "Camera timestamps must increase" }
++                        if (timestamps.isNotEmpty() && it.timestamp - timestamps.last() < 900_000_000L / spec.fps) return@use
++                        val frame = YuvImages.read(it)
++                        writer.append(frame)
++                        timestamps.add(it.timestamp)
++                        progress(timestamps.size, spec, frame)
++                        if (timestamps.size == spec.frames && finished.compareAndSet(false, true)) {
++                            completion.complete(
++                                CapturedReference(
++                                    spec,
++                                    "camera:$id",
++                                    timestamps.toList(),
++                                    "unspecified",
++                                    "unspecified",
++                                    characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0,
++                                ),
++                            )
++                        }
++                    } catch (failure: Throwable) {
++                        finished.set(true)
++                        completion.completeExceptionally(failure)
++                    }
++                }
++            }, handler)
++            try {
++                withTimeout((config.seconds + 15) * 1000L) {
++                    device =
++                        suspendCancellableCoroutine { continuation ->
++                            manager.openCamera(
++                                id,
++                                object : CameraDevice.StateCallback() {
++                                    override fun onOpened(camera: CameraDevice) {
++                                        if (continuation.isActive) continuation.resume(camera) { _, value, _ -> value.close() } else camera.close()
++                                    }
++
++                                    override fun onDisconnected(camera: CameraDevice) {
++                                        camera.close()
++                                        val failure = IllegalStateException("Camera disconnected")
++                                        if (continuation.isActive) continuation.resumeWithException(failure)
++                                        completion.completeExceptionally(failure)
++                                    }
++
++                                    override fun onError(
++                                        camera: CameraDevice,
++                                        error: Int,
++                                    ) {
++                                        camera.close()
++                                        val failure = IllegalStateException("Camera error $error")
++                                        if (continuation.isActive) continuation.resumeWithException(failure)
++                                        completion.completeExceptionally(failure)
++                                    }
++                                },
++                                handler,
++                            )
++                        }
++                    val camera = checkNotNull(device)
++                    session =
++                        suspendCancellableCoroutine { continuation ->
++                            @Suppress("DEPRECATION")
++                            camera.createCaptureSession(
++                                listOf(reader.surface),
++                                object : CameraCaptureSession.StateCallback() {
++                                    override fun onConfigured(value: CameraCaptureSession) {
++                                        if (continuation.isActive) continuation.resume(value) { _, active, _ -> active.close() } else value.close()
++                                    }
++
++                                    override fun onConfigureFailed(value: CameraCaptureSession) {
++                                        value.close()
++                                        if (continuation.isActive) continuation.resumeWithException(IllegalStateException("Camera session failed"))
++                                    }
++                                },
++                                handler,
++                            )
++                        }
++                    val request =
++                        camera.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
++                            addTarget(reader.surface)
++                            val ranges = characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES).orEmpty()
++                            val range = ranges.filter { it.contains(config.fps) }.minByOrNull { it.upper - it.lower }
++                            if (range != null) set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, range)
++                            set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
++                        }
++                    checkNotNull(session).setRepeatingRequest(request.build(), null, handler)
++                    completion.await()
++                }
++            } finally {
++                finished.set(true)
++                runCatching { session?.stopRepeating() }
++                session?.close()
++                device?.close()
++                reader.setOnImageAvailableListener(null, null)
++                reader.close()
++                // Drain any callback still writing a frame before closing its file.
++                thread.quitSafely()
++                thread.join(3000)
++                writer.close()
++            }
++        }
++}
+diff --git a/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/EncodingTelemetry.kt b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/EncodingTelemetry.kt
+new file mode 100644
+index 00000000..d8bfd0cd
+--- /dev/null
++++ b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/EncodingTelemetry.kt
+@@ -0,0 +1,110 @@
++package com.haishinkit.vqmetrix
++
++import android.content.Context
++import android.os.Debug
++import android.os.PowerManager
++import android.os.Process
++import android.os.SystemClock
++import org.json.JSONArray
++import org.json.JSONObject
++import kotlin.math.ceil
++
++/** App-wide resource samples around offline replay, not hardware encoder utilization. */
++internal class EncodingTelemetry(context: Context, private val frames: Int, private val fps: Int) {
++    private val started = SystemClock.elapsedRealtimeNanos()
++    private val cpuStarted = Process.getElapsedCpuTime()
++    private val power = context.getSystemService(PowerManager::class.java)
++    private val pending = mutableMapOf<Long, Double>()
++    private val timings = mutableListOf<JSONObject>()
++    private val latencies = mutableListOf<Double>()
++    private val samples = mutableListOf<JSONObject>()
++    private var lastSample = -250.0
++    private var peakMemory = 0L
++    private var firstOutput: Double? = null
++
++    init {
++        sample(force = true)
++    }
++
++    fun input(ptsUs: Long) {
++        sample()
++        pending[ptsUs] = elapsed()
++    }
++
++    fun output(ptsUs: Long) {
++        val now = elapsed()
++        if (firstOutput == null) firstOutput = now
++        pending.remove(ptsUs)?.let { input ->
++            val latency = (now - input).coerceAtLeast(0.0)
++            latencies.add(latency)
++            timings.add(
++                JSONObject().apply {
++                    put("ptsUs", ptsUs)
++                    put("inputElapsedMs", input)
++                    put("outputElapsedMs", now)
++                    put("latencyMs", latency)
++                },
++            )
++        }
++        sample()
++    }
++
++    fun finish(): JSONObject {
++        sample(force = true)
++        val wall = elapsed().coerceAtLeast(0.001)
++        val cpu = (Process.getElapsedCpuTime() - cpuStarted).coerceAtLeast(0).toDouble()
++        val sorted = latencies.sorted()
++        val p95 = sorted.getOrNull((ceil(sorted.size * 0.95).toInt() - 1).coerceAtLeast(0))
++        val duration = frames * 1000.0 / fps
++        return JSONObject().apply {
++            put("schemaVersion", 1)
++            put("platform", "android")
++            put("mode", "offlineReplay")
++            put("wallTimeMs", wall)
++            put("firstOutputMs", firstOutput ?: JSONObject.NULL)
++            put("frameCount", timings.size)
++            put("throughputFps", timings.size * 1000.0 / wall)
++            put("videoDurationMs", duration)
++            put("realtimeSpeed", duration / wall)
++            put("meanLatencyMs", if (latencies.isEmpty()) JSONObject.NULL else latencies.average())
++            put("p95LatencyMs", p95 ?: JSONObject.NULL)
++            put("appCpuTimeMs", cpu)
++            put("appCpuCores", cpu / wall)
++            put("memoryKind", "pss")
++            put("sampledPeakMemoryBytes", peakMemory)
++            put("sampleIntervalMs", 250)
++            put("samples", JSONArray(samples))
++            put("frameTimings", JSONArray(timings))
++        }
++    }
++
++    private fun elapsed(): Double = (SystemClock.elapsedRealtimeNanos() - started) / 1_000_000.0
++
++    private fun sample(force: Boolean = false) {
++        val time = elapsed()
++        if (!force && time - lastSample < 250) return
++        lastSample = time
++        val memory = Debug.MemoryInfo()
++        Debug.getMemoryInfo(memory)
++        val bytes = memory.totalPss.toLong() * 1024
++        peakMemory = maxOf(peakMemory, bytes)
++        val thermal = power.currentThermalStatus
++        samples.add(
++            JSONObject().apply {
++                put("elapsedMs", time)
++                put("appCpuTimeMs", (Process.getElapsedCpuTime() - cpuStarted).coerceAtLeast(0))
++                put("memoryBytes", bytes)
++                put(
++                    "thermalState",
++                    when (thermal) {
++                        PowerManager.THERMAL_STATUS_NONE -> "nominal"
++                        PowerManager.THERMAL_STATUS_LIGHT, PowerManager.THERMAL_STATUS_MODERATE -> "fair"
++                        PowerManager.THERMAL_STATUS_SEVERE -> "serious"
++                        else -> "critical"
++                    },
++                )
++                put("nativeThermalStatus", thermal)
++            },
++        )
++    }
++}
+diff --git a/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/Reference.kt b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/Reference.kt
+new file mode 100644
+index 00000000..75d9c13a
+--- /dev/null
++++ b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/Reference.kt
+@@ -0,0 +1,142 @@
++package com.haishinkit.vqmetrix
++
++import java.io.BufferedInputStream
++import java.io.BufferedOutputStream
++import java.io.File
++import java.io.InputStream
++import java.io.OutputStream
++
++/** The same exact I420 bytes are stored and supplied to every encoder. */
++data class ReferenceSpec(val width: Int, val height: Int, val fps: Int, val frames: Int) {
++    val frameBytes: Int get() = width * height * 3 / 2
++
++    init {
++        require(width in 64..1920 && height in 64..1080 && width % 2 == 0 && height % 2 == 0)
++        require(fps in 1..60 && frames in 1..600)
++    }
++}
++
++object TestPattern {
++    fun frame(
++        spec: ReferenceSpec,
++        index: Int,
++    ): ByteArray {
++        require(index >= 0)
++        val result = ByteArray(spec.frameBytes)
++        val w = spec.width
++        val h = spec.height
++        for (y in 0 until h) {
++            for (x in 0 until w) {
++                val moving = (x + index * 7) % w
++                val checker = ((x / 8 + y / 8 + index / 3) % 2) * 35
++                val value = 16 + (moving * 170 / w + y * 14 / h + checker) % 220
++                result[y * w + x] = value.toByte()
++            }
++        }
++        val chroma = w * h / 4
++        for (y in 0 until h / 2) {
++            for (x in 0 until w / 2) {
++                result[w * h + y * w / 2 + x] = (96 + x * 64 / (w / 2)).toByte()
++                result[w * h + chroma + y * w / 2 + x] = (96 + (y + index * 3) % 64).toByte()
++            }
++        }
++        return result
++    }
++}
++
++class Y4mWriter(file: File, val spec: ReferenceSpec, range: String = "limited") : AutoCloseable {
++    private val output: OutputStream = BufferedOutputStream(file.outputStream(), 256 * 1024)
++    private var count = 0
++
++    init {
++        val extension =
++            if (range == "limited") {
++                " XCOLORRANGE=LIMITED"
++            } else if (range == "full") {
++                " XCOLORRANGE=FULL"
++            } else {
++                ""
++            }
++        output.write("YUV4MPEG2 W${spec.width} H${spec.height} F${spec.fps}:1 Ip A1:1 C420jpeg$extension\n".toByteArray(Charsets.US_ASCII))
++    }
++
++    fun append(bytes: ByteArray) {
++        require(bytes.size == spec.frameBytes && count < spec.frames)
++        output.write("FRAME\n".toByteArray(Charsets.US_ASCII))
++        output.write(bytes)
++        count++
++    }
++
++    override fun close() = output.close()
++}
++
++class Y4mReader(file: File, val spec: ReferenceSpec) : AutoCloseable {
++    private val input: InputStream = BufferedInputStream(file.inputStream(), 256 * 1024)
++    private var count = 0
++
++    init {
++        val header = line()
++        require(header.startsWith("YUV4MPEG2 ")) { "Invalid Y4M header" }
++        val fields = header.split(' ')
++        require(fields.contains("W${spec.width}") && fields.contains("H${spec.height}") && fields.contains("F${spec.fps}:1"))
++        require(fields.contains("C420jpeg")) { "Unsupported Y4M format" }
++    }
++
++    fun next(): ByteArray? {
++        if (count == spec.frames) return null
++        require(line() == "FRAME") { "Missing reference frame $count" }
++        val result = ByteArray(spec.frameBytes)
++        var offset = 0
++        while (offset < result.size) {
++            val read = input.read(result, offset, result.size - offset)
++            check(read > 0) { "Truncated reference frame $count" }
++            offset += read
++        }
++        count++
++        return result
++    }
++
++    override fun close() = input.close()
++
++    private fun line(): String {
++        val bytes = ArrayList<Byte>()
++        while (bytes.size <= 1024) {
++            val value = input.read()
++            check(value >= 0) { "Unexpected end of Y4M file" }
++            if (value == 10) return bytes.toByteArray().toString(Charsets.US_ASCII)
++            bytes.add(value.toByte())
++        }
++        error("Y4M line is too long")
++    }
++}
++
++data class BatchConfig(
++    val width: Int,
++    val height: Int,
++    val fps: Int,
++    val seconds: Int,
++    val bitrates: List<Int>,
++    val codec: String,
++    val camera: Boolean,
++) {
++    init {
++        ReferenceSpec(width, height, fps, fps * seconds)
++        require(seconds in 1..10 && fps in listOf(15, 30))
++        require(bitrates.isNotEmpty() && bitrates.size <= 6 && bitrates.distinct().size == bitrates.size)
++        require(bitrates.all { it in 50_000..20_000_000 })
++        require(codec in listOf("h264", "hevc"))
++    }
++
++    companion object {
++        fun parseBitrates(value: String): List<Int> {
++            val fields = value.split(',')
++            require(fields.size in 1..6)
++            return fields.map {
++                val number = it.trim().toBigDecimalOrNull() ?: error("Invalid bitrate")
++                val bits = number.multiply(1_000_000.toBigDecimal()).intValueExact()
++                require(bits in 50_000..20_000_000)
++                bits
++            }.also { require(it.distinct().size == it.size) }
++        }
++    }
++}
+diff --git a/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/ScreenReference.kt b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/ScreenReference.kt
+new file mode 100644
+index 00000000..d1069211
+--- /dev/null
++++ b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/ScreenReference.kt
+@@ -0,0 +1,70 @@
++package com.haishinkit.vqmetrix
++
++import android.graphics.Bitmap
++import android.os.SystemClock
++import com.haishinkit.screen.Screen
++import kotlinx.coroutines.delay
++import kotlinx.coroutines.suspendCancellableCoroutine
++import kotlinx.coroutines.withTimeout
++import java.io.File
++import kotlin.coroutines.resumeWithException
++import kotlin.math.min
++
++/** Samples the existing mixer composition, including camera, projection and overlays. */
++class ScreenReference(private val screen: Screen, private val source: String) {
++    suspend fun record(
++        file: File,
++        config: BatchConfig,
++        frame: (Int, ReferenceSpec, ByteArray) -> Unit,
++    ): CapturedReference {
++        val timestamps = ArrayList<Long>()
++        var spec: ReferenceSpec? = null
++        var writer: Y4mWriter? = null
++        val start = SystemClock.elapsedRealtimeNanos()
++        try {
++            withTimeout(config.seconds * 1000L + 15_000) {
++                repeat(config.seconds * config.fps) { index ->
++                    val deadline = start + index * 1_000_000_000L / config.fps
++                    delay(((deadline - SystemClock.elapsedRealtimeNanos()) / 1_000_000).coerceAtLeast(0))
++                    val bitmap =
++                        withTimeout(3_000) {
++                            suspendCancellableCoroutine { continuation ->
++                                screen.readPixels { bitmap ->
++                                    if (bitmap == null) {
++                                        if (continuation.isActive) continuation.resumeWithException(IllegalStateException("No mixer frame is available"))
++                                    } else {
++                                        continuation.resume(bitmap) { _, value, _ -> value.recycle() }
++                                    }
++                                }
++                            }
++                        }
++                    timestamps.add(SystemClock.elapsedRealtimeNanos())
++                    try {
++                        if (spec == null) {
++                            val scale = min(1.0, min(config.width.toDouble() / bitmap.width, config.height.toDouble() / bitmap.height))
++                            val width = ((bitmap.width * scale).toInt() / 2 * 2).coerceAtLeast(2)
++                            val height = ((bitmap.height * scale).toInt() / 2 * 2).coerceAtLeast(2)
++                            spec = ReferenceSpec(width, height, config.fps, config.seconds * config.fps)
++                            writer = Y4mWriter(file, checkNotNull(spec))
++                        }
++                        val actual = checkNotNull(spec)
++                        val scaled = Bitmap.createScaledBitmap(bitmap, actual.width, actual.height, true)
++                        val yuv =
++                            try {
++                                YuvImages.fromBitmap(scaled)
++                            } finally {
++                                if (scaled !== bitmap) scaled.recycle()
++                            }
++                        checkNotNull(writer).append(yuv)
++                        frame(index + 1, actual, yuv)
++                    } finally {
++                        bitmap.recycle()
++                    }
++                }
++            }
++        } finally {
++            writer?.close()
++        }
++        return CapturedReference(checkNotNull(spec), "mixer-$source", timestamps, "limited", "bt709")
++    }
++}
+diff --git a/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/VariantEncoder.kt b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/VariantEncoder.kt
+new file mode 100644
+index 00000000..0d8493eb
+--- /dev/null
++++ b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/VariantEncoder.kt
+@@ -0,0 +1,141 @@
++package com.haishinkit.vqmetrix
++
++import android.content.Context
++import android.media.MediaCodec
++import android.media.MediaCodecInfo
++import android.media.MediaCodecList
++import android.media.MediaFormat
++import android.media.MediaMuxer
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.currentCoroutineContext
++import kotlinx.coroutines.ensureActive
++import kotlinx.coroutines.withContext
++import kotlinx.coroutines.withTimeout
++import org.json.JSONObject
++import java.io.File
++
++data class EncodedVariant(
++    val file: File,
++    val bitrate: Int,
++    val codec: String,
++    val codecName: String,
++    val hardwareAccelerated: Boolean,
++    val outputPtsUs: List<Long>,
++    val encodedBytes: Long,
++    val performance: JSONObject,
++)
++
++class VariantEncoder(
++    private val context: Context,
++) {
++    suspend fun encode(
++        reference: File,
++        captured: CapturedReference,
++        target: File,
++        bitrate: Int,
++        format: String,
++        progress: (Int) -> Unit,
++    ): EncodedVariant =
++        withContext(Dispatchers.IO) {
++            val spec = captured.spec
++            val telemetry = EncodingTelemetry(context, spec.frames, spec.fps)
++            val mime = if (format == "hevc") MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
++            val mediaFormat =
++                MediaFormat.createVideoFormat(mime, spec.width, spec.height).apply {
++                    setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
++                    setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
++                    setInteger(MediaFormat.KEY_FRAME_RATE, spec.fps)
++                    setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
++                    setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
++                    setInteger(MediaFormat.KEY_PROFILE, if (format == "hevc") MediaCodecInfo.CodecProfileLevel.HEVCProfileMain else MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
++                    if (captured.range == "limited") setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
++                    if (captured.matrix == "bt709") setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709)
++                    setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
++                }
++            val name = checkNotNull(MediaCodecList(MediaCodecList.REGULAR_CODECS).findEncoderForFormat(mediaFormat)) { "No compatible $format YUV encoder" }
++            val native = MediaCodec.createByCodecName(name)
++            var muxer: MediaMuxer? = null
++            var started = false
++            var running = false
++            val outputPts = ArrayList<Long>()
++            var bytes = 0L
++            try {
++                val output = MediaMuxer(target.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
++                muxer = output
++                native.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
++                native.start()
++                running = true
++                var track = -1
++                var inputIndex = 0
++                var inputEnded = false
++                var outputEnded = false
++                val info = MediaCodec.BufferInfo()
++                Y4mReader(reference, spec).use { reader ->
++                    withTimeout(90_000) {
++                        while (!outputEnded) {
++                            currentCoroutineContext().ensureActive()
++                            if (!inputEnded) {
++                                val index = native.dequeueInputBuffer(10_000)
++                                if (index >= 0) {
++                                    val data = reader.next()
++                                    if (data == null) {
++                                        native.queueInputBuffer(index, 0, 0, pts(spec.frames, spec.fps), MediaCodec.BUFFER_FLAG_END_OF_STREAM)
++                                        inputEnded = true
++                                    } else {
++                                        val image = checkNotNull(native.getInputImage(index)) { "Encoder does not support YUV input images" }
++                                        YuvImages.write(image, data, spec)
++                                        val timestamp = pts(inputIndex++, spec.fps)
++                                        telemetry.input(timestamp)
++                                        native.queueInputBuffer(index, 0, data.size, timestamp, 0)
++                                    }
++                                }
++                            }
++                            when (val index = native.dequeueOutputBuffer(info, 10_000)) {
++                                MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
++                                    check(!started) { "Unexpected encoder format change" }
++                                    track = output.addTrack(native.outputFormat)
++                                    output.start()
++                                    started = true
++                                }
++                                in 0..Int.MAX_VALUE -> {
++                                    try {
++                                        if (info.size > 0 && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) {
++                                            telemetry.output(info.presentationTimeUs)
++                                            check(started)
++                                            output.writeSampleData(track, checkNotNull(native.getOutputBuffer(index)), info)
++                                            outputPts.add(info.presentationTimeUs)
++                                            bytes += info.size
++                                            progress(outputPts.size)
++                                        }
++                                        outputEnded = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
++                                    } finally {
++                                        native.releaseOutputBuffer(index, false)
++                                    }
++                                }
++                            }
++                        }
++                    }
++                }
++                check(outputPts.size == spec.frames) { "Encoder produced ${outputPts.size}/${spec.frames} frames" }
++                check(outputPts == (0 until spec.frames).map { pts(it, spec.fps) }) { "Encoder timestamps differ from the reference" }
++                output.stop()
++                started = false
++                EncodedVariant(target, bitrate, format, name, native.codecInfo.isHardwareAccelerated, outputPts.toList(), bytes, telemetry.finish())
++            } finally {
++                if (running) runCatching { native.stop() }
++                native.release()
++                try {
++                    if (started) runCatching { muxer?.stop() }
++                } finally {
++                    muxer?.release()
++                }
++            }
++        }
++
++    companion object {
++        fun pts(
++            index: Int,
++            fps: Int,
++        ): Long = index.toLong() * 1_000_000 / fps
++    }
++}
+diff --git a/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/YuvImages.kt b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/YuvImages.kt
+new file mode 100644
+index 00000000..91a0fb52
+--- /dev/null
++++ b/app/vqmetrix/src/main/java/com/haishinkit/vqmetrix/YuvImages.kt
+@@ -0,0 +1,122 @@
++package com.haishinkit.vqmetrix
++
++import android.graphics.Bitmap
++import android.graphics.ImageFormat
++import android.media.Image
++import java.nio.ByteBuffer
++
++object YuvImages {
++    /** Converts composited SDR RGB to limited-range BT.709 planar YUV420. */
++    fun fromBitmap(bitmap: Bitmap): ByteArray {
++        val width = bitmap.width
++        val height = bitmap.height
++        require(width % 2 == 0 && height % 2 == 0)
++        val pixels = IntArray(width * height)
++        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
++        val output = ByteArray(width * height * 3 / 2)
++
++        fun channel(
++            pixel: Int,
++            shift: Int,
++        ) = (pixel shr shift) and 255
++        for (y in 0 until height) for (x in 0 until width) {
++            val pixel = pixels[y * width + x]
++            val r = channel(pixel, 16)
++            val g = channel(pixel, 8)
++            val b = channel(pixel, 0)
++            output[y * width + x] = (16 + (0.182586 * r + 0.614231 * g + 0.062007 * b).toInt()).coerceIn(16, 235).toByte()
++            if (x % 2 == 0 && y % 2 == 0) {
++                var cb = 0.0
++                var cr = 0.0
++                for (dy in 0..1) for (dx in 0..1) {
++                    val color = pixels[(y + dy) * width + x + dx]
++                    val red = channel(color, 16)
++                    val green = channel(color, 8)
++                    val blue = channel(color, 0)
++                    cb += -0.100644 * red - 0.338572 * green + 0.439216 * blue
++                    cr += 0.439216 * red - 0.398942 * green - 0.040274 * blue
++                }
++                val index = y / 2 * (width / 2) + x / 2
++                output[width * height + index] = (128 + (cb / 4).toInt()).coerceIn(16, 240).toByte()
++                output[width * height * 5 / 4 + index] = (128 + (cr / 4).toInt()).coerceIn(16, 240).toByte()
++            }
++        }
++        return output
++    }
++
++    fun read(image: Image): ByteArray {
++        require(image.format == ImageFormat.YUV_420_888)
++        val crop = image.cropRect
++        val w = crop.width()
++        val h = crop.height()
++        require(w % 2 == 0 && h % 2 == 0)
++        val output = ByteArray(w * h * 3 / 2)
++        var offset = 0
++        image.planes.forEachIndexed { planeIndex, plane ->
++            val divisor = if (planeIndex == 0) 1 else 2
++            val width = w / divisor
++            val height = h / divisor
++            val buffer = plane.buffer.duplicate()
++            val start = buffer.position() + crop.top / divisor * plane.rowStride + crop.left / divisor * plane.pixelStride
++            copyPlaneToArray(buffer, start, plane.rowStride, plane.pixelStride, width, height, output, offset)
++            offset += width * height
++        }
++        return output
++    }
++
++    fun write(
++        image: Image,
++        data: ByteArray,
++        spec: ReferenceSpec,
++    ) {
++        require(image.format == ImageFormat.YUV_420_888)
++        require(image.cropRect.width() >= spec.width && image.cropRect.height() >= spec.height)
++        require(data.size == spec.frameBytes)
++        var offset = 0
++        image.planes.forEachIndexed { planeIndex, plane ->
++            val divisor = if (planeIndex == 0) 1 else 2
++            val width = spec.width / divisor
++            val height = spec.height / divisor
++            val buffer = plane.buffer.duplicate()
++            val start = buffer.position() + image.cropRect.top / divisor * plane.rowStride + image.cropRect.left / divisor * plane.pixelStride
++            for (y in 0 until height) {
++                for (x in 0 until width) buffer.put(start + y * plane.rowStride + x * plane.pixelStride, data[offset + y * width + x])
++            }
++            offset += width * height
++        }
++    }
++
++    fun preview(
++        bytes: ByteArray,
++        spec: ReferenceSpec,
++    ): Bitmap {
++        val width = minOf(240, spec.width)
++        val height = maxOf(1, spec.height * width / spec.width)
++        val pixels = IntArray(width * height)
++        for (y in 0 until height) {
++            for (x in 0 until width) {
++                val sx = x * spec.width / width
++                val sy = y * spec.height / height
++                val luma = bytes[sy * spec.width + sx].toInt() and 255
++                // A neutral luma preview avoids assuming an unknown camera color matrix.
++                pixels[y * width + x] = (255 shl 24) or (luma shl 16) or (luma shl 8) or luma
++            }
++        }
++        return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
++    }
++
++    internal fun copyPlaneToArray(
++        buffer: ByteBuffer,
++        start: Int,
++        rowStride: Int,
++        pixelStride: Int,
++        width: Int,
++        height: Int,
++        destination: ByteArray,
++        destinationOffset: Int,
++    ) {
++        for (y in 0 until height) {
++            for (x in 0 until width) destination[destinationOffset + y * width + x] = buffer.get(start + y * rowStride + x * pixelStride)
++        }
++    }
++}
 diff --git a/app/vqmetrix/src/main/res/values-ja/strings.xml b/app/vqmetrix/src/main/res/values-ja/strings.xml
 new file mode 100644
 index 00000000..0e4b0093
@@ -1045,19 +2246,113 @@ index 00000000..a3725f0c
 +++ b/app/vqmetrix/src/main/res/xml/vq_file_paths.xml
 @@ -0,0 +1 @@
 +<paths xmlns:android="http://schemas.android.com/apk/res/android"><files-path name="runs" path="runs/" /></paths>
+diff --git a/app/vqmetrix/src/test/java/com/haishinkit/vqmetrix/ReferenceTest.kt b/app/vqmetrix/src/test/java/com/haishinkit/vqmetrix/ReferenceTest.kt
+new file mode 100644
+index 00000000..384d98a9
+--- /dev/null
++++ b/app/vqmetrix/src/test/java/com/haishinkit/vqmetrix/ReferenceTest.kt
+@@ -0,0 +1,74 @@
++package com.haishinkit.vqmetrix
++
++import org.junit.Assert.assertArrayEquals
++import org.junit.Assert.assertEquals
++import org.junit.Assert.assertFalse
++import org.junit.Assert.assertNull
++import org.junit.Assert.assertThrows
++import org.junit.Test
++import java.io.File
++import java.nio.ByteBuffer
++
++class ReferenceTest {
++    @Test
++    fun referenceRoundTripPreservesEveryPlaneAndFrame() {
++        val file = File.createTempFile("reference", ".y4m")
++        val spec = ReferenceSpec(64, 64, 30, 3)
++        try {
++            Y4mWriter(file, spec).use { writer -> (0 until spec.frames).forEach { writer.append(TestPattern.frame(spec, it)) } }
++            Y4mReader(file, spec).use { reader ->
++                (0 until spec.frames).forEach { assertArrayEquals(TestPattern.frame(spec, it), reader.next()) }
++                assertNull(reader.next())
++            }
++            assertFalse(TestPattern.frame(spec, 0).contentEquals(TestPattern.frame(spec, 1)))
++            val original = file.readBytes()
++            file.writeBytes(original.copyOf(original.size - 2))
++            assertThrows(IllegalStateException::class.java) {
++                Y4mReader(file, spec).use { reader -> repeat(3) { reader.next() } }
++            }
++        } finally {
++            file.delete()
++        }
++    }
++
++    @Test
++    fun rejectsAmbiguousBitratesAndInsecureReceiverAddresses() {
++        assertEquals(listOf(500_000, 1_000_000, 2_000_000), BatchConfig.parseBitrates("0.5, 1, 2"))
++        listOf("", "NaN", "1,1", "-1", "21", "0.0000001").forEach { input ->
++            assertThrows(Exception::class.java) { BatchConfig.parseBitrates(input) }
++        }
++        assertEquals("https://example.com/vq/api/v1/runs", BatchUploader.endpoint("https://example.com/vq/").toString())
++        assertEquals("http://192.168.1.2:8787/api/v1/runs", BatchUploader.endpoint("http://192.168.1.2:8787").toString())
++        assertEquals("http://mac.local:8787/api/v1/runs", BatchUploader.endpoint("http://mac.local:8787").toString())
++        listOf("http://8.8.8.8", "http://example.com", "https://user:pass@example.com", "https://example.com?token=x", "file:///tmp/a").forEach {
++            assertThrows(IllegalArgumentException::class.java) { BatchUploader.endpoint(it) }
++        }
++    }
++
++    @Test
++    fun discoveryRequiresCompatibleProtocolAndLocalHttpHost() {
++        val txt = mapOf("protocol" to "1", "scheme" to "http", "host" to "studio.local")
++        assertEquals("http://studio.local:8787", ReceiverDiscovery.endpoint("Studio", 8787, txt)?.baseUrl)
++        assertEquals("http://192.168.1.2:8787", ReceiverDiscovery.endpoint("Studio", 8787, txt, "192.168.1.2")?.baseUrl)
++        assertNull(ReceiverDiscovery.endpoint("Studio", 8787, txt + ("protocol" to "2")))
++        assertNull(ReceiverDiscovery.endpoint("Studio", 8787, txt + ("host" to "example.com")))
++        assertNull(ReceiverDiscovery.endpoint("Studio", 8787, txt + ("host" to "user@studio.local")))
++        assertNull(ReceiverDiscovery.endpoint("Studio", 0, txt))
++    }
++
++    @Test
++    fun paddedInterleavedChromaCopiesOnlyValidPixels() {
++        val source = ByteBuffer.wrap(byteArrayOf(99, 1, 88, 2, 77, 66, 55, 3, 44, 4, 33))
++        val destination = ByteArray(6)
++        YuvImages.copyPlaneToArray(source, 1, 6, 2, 2, 2, destination, 1)
++        assertArrayEquals(byteArrayOf(0, 1, 2, 3, 4, 0), destination)
++    }
++
++    @Test
++    fun presentationTimestampsDoNotAccumulateRoundingError() {
++        assertEquals(0L, VariantEncoder.pts(0, 30))
++        assertEquals(33_333L, VariantEncoder.pts(1, 30))
++        assertEquals(1_000_000L, VariantEncoder.pts(30, 30))
++        assertEquals(10_000_000L, VariantEncoder.pts(300, 30))
++    }
++}
 diff --git a/settings.gradle.kts b/settings.gradle.kts
-index 0b9a8225..4e736cc7 100644
+index 0b9a8225..3f8a1b31 100644
 --- a/settings.gradle.kts
 +++ b/settings.gradle.kts
-@@ -29,3 +29,11 @@ include(":rtmp")
+@@ -17,6 +17,12 @@ dependencyResolutionManagement {
+     repositories {
+         google()
+         mavenCentral()
++        exclusiveContent {
++            forRepository {
++                maven { url = uri(providers.gradleProperty("vqmetrixRepository").orElse("https://jitpack.io").get()) }
++            }
++            filter { includeGroup("com.github.HaishinKit.VQMetrix") }
++        }
+     }
+ }
+ 
+@@ -29,3 +35,12 @@ include(":rtmp")
  include(":srt")
  include(":vulkan")
  include(":rtc")
 +
-+// Optional developer tool when the VQMetrix checkout is available beside this repository.
-+val vqmetrixDirectory = file(providers.gradleProperty("vqmetrixDir").orElse("../VQMetrix/Android/producer").get())
-+if (vqmetrixDirectory.resolve("build.gradle.kts").isFile) {
-+    include(":vqmetrix-producer", ":vqmetrix-example")
-+    project(":vqmetrix-example").projectDir = file("app/vqmetrix")
-+    project(":vqmetrix-producer").projectDir = vqmetrixDirectory
++include(":vqmetrix-example")
++project(":vqmetrix-example").projectDir = file("app/vqmetrix")
++
++// Explicit source override for VQMetrix development; normal builds use the published artifact.
++providers.gradleProperty("vqmetrixTransferDir").orNull?.let { directory ->
++    include(":vqmetrix-transfer")
++    project(":vqmetrix-transfer").projectDir = file(directory)
 +}

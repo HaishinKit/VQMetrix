@@ -113,3 +113,22 @@ The current evaluator accepts limited-range BT.709 SDR references, including mix
 and synthetic patterns. Unspecified camera colors fail explicitly instead of assuming a matrix.
 Receiving can be stopped while accepted evaluations finish. Keep the Mac app running until
 jobs finish; interrupted evaluations are retried after reception starts on the next launch.
+
+## Optional sender performance
+
+Each variant may include `performance` with schemaVersion 1, platform, mode, wallTimeMs,
+frameCount, throughputFps, videoDurationMs and realtimeSpeed. Optional fields include
+firstOutputMs, meanLatencyMs, p95LatencyMs, appCpuTimeMs, appCpuCores, memoryKind,
+sampledPeakMemoryBytes, sampleIntervalMs, resource samples and frame timings.
+The detailed schema and caveats are in the DocC PerformanceMetrics guide.
+
+Android Example collects offlineReplay metrics; this does not measure the exact live
+stream. iOS can submit the same fields, but no iOS producer is shipped in this repository.
+Memory must identify its measurement kind (for example PSS versus resident memory).
+Thermal states are nominal/fair/serious/critical/unknown, with the native OS value retained.
+Do not interpret them as temperatures or identical conditions across platforms.
+
+The receiver validates available timing/count data, preserves the original manifest,
+and stores measurements in history and HTML reports. Missing measurements remain absent.
+Older packages without performance data still work. The transfer AAR only transports
+these packages; it does not collect performance or depend on a particular codec library.

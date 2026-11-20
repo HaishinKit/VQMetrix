@@ -26,7 +26,7 @@ jobs:
       - id: versions
         name: Resolve pinned versions
         env:
-          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '0.1.0' }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '1.0.0' }}
         run: /usr/bin/ruby Scripts/ci_versions.rb
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -87,7 +87,7 @@ jobs:
       - id: versions
         name: Resolve pinned versions
         env:
-          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '0.1.0' }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '1.0.0' }}
         run: /usr/bin/ruby Scripts/ci_versions.rb
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -112,18 +112,23 @@ jobs:
         env:
           APP_VERSION: ${{ steps.versions.outputs.version }}
         run: |
-          ./Android/gradlew -p Android :producer:testDebugUnitTest :producer:lintDebug :producer:dokkaGenerate \
-            -PappVersionName="$APP_VERSION"
-          ../HaishinKit.kt/gradlew -p ../HaishinKit.kt :app:assembleDebug -PappVersionName="$APP_VERSION"
+          ./Android/gradlew -p Android :transfer:testDebugUnitTest :transfer:lintDebug :transfer:dokkaGenerate :transfer:publishReleasePublicationToVerificationRepository \
+            -PpublishVersion="$APP_VERSION"
+          ../HaishinKit.kt/gradlew -p ../HaishinKit.kt :app:assembleDebug :vqmetrix-example:testDebugUnitTest -PappVersionName="$APP_VERSION" -PvqmetrixTransferDir="$PWD/Android/transfer"
           cp ../HaishinKit.kt/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/HaishinKit-Example-debug.apk"
+          cp "Android/transfer/build/outputs/aar/transfer-release.aar" "$RUNNER_TEMP/VQMetrix-transfer.aar"
+          cp "Android/build/maven-repository/com/github/HaishinKit/VQMetrix/transfer/$APP_VERSION/transfer-$APP_VERSION-sources.jar" "$RUNNER_TEMP/VQMetrix-transfer-sources.jar"
+          cp "Android/transfer/build/publications/release/pom-default.xml" "$RUNNER_TEMP/VQMetrix-transfer.pom"
           mkdir -p "$RUNNER_TEMP/android-reference/android"
-          cp -R Android/producer/build/dokka/html/. "$RUNNER_TEMP/android-reference/android/"
+          cp -R Android/transfer/build/dokka/html/. "$RUNNER_TEMP/android-reference/android/"
           tar -czf "$RUNNER_TEMP/android-reference.tar.gz" -C "$RUNNER_TEMP/android-reference" android
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: VQMetrix-Android
           path: |
             ${{ runner.temp }}/HaishinKit-Example-debug.apk
+            ${{ runner.temp }}/VQMetrix-transfer.*
+            ${{ runner.temp }}/VQMetrix-transfer-sources.jar
             ${{ runner.temp }}/android-reference.tar.gz
           if-no-files-found: error
           compression-level: 0
@@ -158,7 +163,7 @@ jobs:
           path: ${{ runner.temp }}/artifacts
       - name: Assemble API site
         env:
-          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '0.1.0' }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '1.0.0' }}
         run: |
           mkdir -p "$RUNNER_TEMP/site"
           tar -xzf "$RUNNER_TEMP/artifacts/swift-reference.tar.gz" -C "$RUNNER_TEMP/site"

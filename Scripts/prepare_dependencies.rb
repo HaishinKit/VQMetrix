@@ -11,6 +11,9 @@ requested.each do |kind|
   abort "Missing #{directory}; check out #{versions.fetch(kind).fetch('repository')} at #{versions.fetch(kind).fetch('revision')}" unless File.directory?(directory)
   marker = kind == 'swift' ? 'HaishinKit/Sources/Codec/VideoCodecProbe.swift' : 'app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/MixerCapture.kt'
   ready = File.file?(File.join(directory, marker))
+  if kind == 'android' && ready
+    ready = File.read(File.join(directory, 'app/vqmetrix/build.gradle.kts')).include?('com.github.HaishinKit.VQMetrix:transfer:')
+  end
   next if ready
   head,status = Open3.capture2('git','rev-parse','HEAD', chdir: directory)
   abort "Wrong #{name} revision" unless status.success? && head.strip == versions.fetch(kind).fetch('revision')

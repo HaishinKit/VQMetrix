@@ -74,9 +74,25 @@ struct UploadIntegrationTests {
         try JSONSerialization.data(withJSONObject:["referencePtsUs":pts,"captureTimestampsNs":[],"variants":[mp4.lastPathComponent:pts]]).write(to:map)
         let id = UUID()
         let files = try [reference,map,mp4].map { CaptureManifest.Payload(path:$0.lastPathComponent,size:Int64(try Data(contentsOf:$0).count),sha256:try UploadPackage.digest($0)) }
+        var frameTimes: [EncodingPerformance.FrameTiming] = []
+        for frame: Int in 0..<15 {
+            let pts: Int64 = Int64(frame) * Int64(1_000_000) / Int64(15)
+            let queued: Double = Double(frame) * 5.0
+            let returned: Double = queued + 4.0
+            let timing = EncodingPerformance.FrameTiming(ptsUs:pts,inputElapsedMs:queued,outputElapsedMs:returned,latencyMs:4.0)
+            frameTimes.append(timing)
+        }
+        let resourceSamples: [EncodingPerformance.ResourceSample] = [
+            .init(elapsedMs:0,appCpuTimeMs:0,memoryBytes:1048576,thermalState:"nominal",nativeThermalStatus:0),
+            .init(elapsedMs:100,appCpuTimeMs:20,memoryBytes:2097152,thermalState:"fair",nativeThermalStatus:1)
+        ]
+        let performance = EncodingPerformance(schemaVersion:1,platform:"android",mode:"offlineReplay",wallTimeMs:100,
+            firstOutputMs:4,frameCount:15,throughputFps:150,videoDurationMs:1000,realtimeSpeed:10,
+            meanLatencyMs:4,p95LatencyMs:4,appCpuTimeMs:20,appCpuCores:0.2,memoryKind:"pss",sampledPeakMemoryBytes:2097152,
+            sampleIntervalMs:250,samples:resourceSamples,frameTimings:frameTimes)
         let manifest = CaptureManifest(schema:"vqmetrix.capture.v1",schemaVersion:1,runId:id.uuidString,
             reference:.init(file:"reference.y4m",source:"test-pattern-v1",width:64,height:64,fpsNumerator:15,fpsDenominator:1,frameCount:15,pixelFormat:"yuv420p",bitDepth:8,colorRange:"limited",colorMatrix:"bt709",frameMap:"frame-map.json"),
-            variants:[.init(file:mp4.lastPathComponent,codec:"h264",targetBitrate:300000,frameCount:15,width:64,height:64)],files:files)
+            variants:[.init(file:mp4.lastPathComponent,codec:"h264",targetBitrate:300000,frameCount:15,width:64,height:64,performance:performance)],files:files)
         let manifestURL = root.appendingPathComponent("manifest.json"); try JSONEncoder().encode(manifest).write(to:manifestURL)
         let zip = root.appendingPathComponent("batch.zip")
         do {
@@ -112,6 +128,10 @@ struct UploadIntegrationTests {
         let detail = try await history.detail(try #require(entries.first).directory)
         #expect(detail.run.evaluatedFrames == 15)
         #expect(detail.run.completeEvaluation)
+        #expect(detail.run.senderPerformance?.first?.metrics.p95LatencyMs == 4)
+        let report = try await history.report(try #require(entries.first).directory,language:.english)
+        #expect(report.contains("Sender performance"))
+        #expect(report.contains("p95"))
         #expect((detail.run.segments.first?.meanVMAF ?? 0) > 95)
         let (_,retry) = try await URLSession.shared.upload(for:request,from:zipData)
         #expect((retry as? HTTPURLResponse)?.statusCode == 202)

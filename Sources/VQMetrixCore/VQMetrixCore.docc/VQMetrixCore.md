@@ -13,3 +13,12 @@ validate packages and queue evaluation into the shared history/report model.
 
 - <doc:UserGuide>
 - <doc:Transfer>
+
+### Understanding quality
+
+- <doc:UnderstandingVMAF>
+- <doc:UnderstandingVMAF-Japanese>
+
+### Device performance
+
+- <doc:PerformanceMetrics>

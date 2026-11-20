@@ -1,35 +1,47 @@
 # Building and releasing VQMetrix
 
-`Build and release` runs on main, pull requests, manual dispatch, and semantic-version
-tags such as `v0.1.0` or `0.1.0`. A tag is validated before it is used as a version.
-This setup does not create tags, change repository visibility, or publish SDK releases.
+The release version is stored in `VERSION`. Use the same value for the Git tag,
+application version and Android dependency: **1.0.0**, without a `v` prefix. A prefix is
+only a tag convention; on JitPack it also becomes part of the requested version.
 
-Each build checks out the exact HaishinKit revisions in `Support/dependencies.json` and
-applies only the included development adapters. Update the revisions and patches together
-when the upstream APIs change. Until merged upstream, the Example screen and integration are supplied with the Android
-adapter; no RTC or unrelated local changes are included.
+## Release contents
 
-The workflow builds:
+The tag workflow tests and packages:
 
-- A native macOS app with bundled libvmaf, model, localization resources, and licenses.
-- The HaishinKit.kt Example APK, with its VQMetrix screen and the reusable producer module.
-- Swift DocC and Kotlin Dokka, combined with guides into `api-documentation.tar.gz`.
+- The macOS app, with bundled libvmaf, model, localization and license notices. The CLI is no longer built or bundled.
+- The HaishinKit.kt Example development APK with camera/projection sample capture.
+- The standalone Android transfer AAR, sources and Maven POM.
+- Swift DocC and Kotlin Dokka, combined into `api-documentation.tar.gz`.
+- SHA256SUMS.txt for the release assets.
 
-On tags, the apps, reference archive, and SHA256SUMS.txt are attached to GitHub Release.
-App binaries use development signing. The macOS minimum deployment version is the highest
-requirement of its executable and bundled libvmaf. A production channel needs Developer ID
-signing/notarization and a persistent Android signing key; neither is silently configured.
+The Android artifact is `com.github.HaishinKit.VQMetrix:transfer:1.0.0` on JitPack.
+It does not depend on HaishinKit. Capture/encoding implementations belong to the SDK
+Example. Standard `maven-publish` metadata allows other Maven repositories to be added
+later; Maven Central still requires its own account, namespace and signing setup.
 
-For an offline reference, extract the documentation archive and run `ruby serve.rb`.
-The server binds only to localhost and serves the reference at `/VQMetrix/`. It does not
-receive video uploads.
+## Verification and tags
 
-To also publish the API site, configure GitHub Pages to use GitHub Actions and set the
-repository variable `PUBLISH_PAGES=true`. This is opt-in; build artifacts and release assets
-do not depend on Pages being configured. Private repositories need a plan that supports
-Pages if enabling that option.
+Main, pull requests and manual dispatch run verification without creating releases.
+The workflow checks out pinned SDK revisions from `Support/dependencies.json` and applies
+the included development adapters. The Android adapter changes Example code only.
+Update a revision and its adapter together. Native camera/codec tests need real hardware.
+The transfer library can be built without either SDK checkout.
 
-Linux CI runs Android unit tests and lint. Hardware codec/camera tests were run on a Pixel
-5a; run `:producer:connectedDebugAndroidTest` on a connected device before a release.
-macOS CI runs non-capture tests; VideoToolbox integration tests can be run locally with
-`swift test`. Failure reporting uses runner Ruby without Bundler or gems.
+After verification, create and push the exact version tag. The workflow attaches
+applications, library and reference assets to GitHub Releases. JitPack builds its Maven
+artifacts from the same tag when requested. Never move a published tag.
+
+App binaries use development signing. The Mac minimum OS is the highest requirement
+of its executable and bundled libvmaf. Developer ID notarization and a persistent
+Android signing key are separate production-distribution steps.
+
+## Documentation
+
+GitHub Pages uses GitHub Actions and repository variable `PUBLISH_PAGES=true`.
+Tag builds publish the combined site under `/VQMetrix/`, with Swift documentation under
+`/swift/` and Android API documentation under `/android/`. The Mac Help menu and sidebar
+open the language-appropriate DocC VMAF score guide.
+
+For offline reading, extract the documentation archive and run `ruby serve.rb`.
+It binds to localhost and serves `/VQMetrix/`; it does not receive video uploads.
+Failure-reporting helpers use runner Ruby without Bundler or gems.

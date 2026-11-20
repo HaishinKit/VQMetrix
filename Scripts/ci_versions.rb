@@ -7,8 +7,8 @@ values = deps.to_h do |kind, dependency|
   abort 'Invalid dependency revision' unless revision.match?(/\A[0-9a-f]{40}\z/)
   ["#{kind}_revision", revision]
 end
-version = ENV.fetch('RELEASE_TAG', '0.1.0').sub(/\Av/, '')
-abort 'Use a semantic version tag, such as v0.1.0' unless version.match?(/\A[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?\z/)
+version = ENV.fetch('RELEASE_TAG', File.read(File.join(root, 'VERSION')).strip).sub(/\Av/, '')
+abort 'Use a semantic version tag, such as 1.0.0' unless version.match?(/\A[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?\z/)
 values['version'] = version
 if ENV['GITHUB_OUTPUT']
   File.open(ENV.fetch('GITHUB_OUTPUT'), 'a') { |file| values.each { |key,value| file.puts "#{key}=#{value}" } }

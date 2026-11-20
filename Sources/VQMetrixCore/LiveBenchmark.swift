@@ -457,6 +457,7 @@ package struct SavedRun: Codable, Sendable {
     package var createdAt: Date? = nil
     package var format: String? = nil
     package var failure: String? = nil
+    package var senderPerformance: [SenderPerformance]? = nil
 
 }
 

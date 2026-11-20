@@ -4,5 +4,5 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "VQMetrixAndroid"
-include(":producer", ":haishinkit")
-project(":haishinkit").projectDir = file("../../HaishinKit.kt/haishinkit")
+include(":transfer")
+// The original producer sources are retained for migration, but are not published.

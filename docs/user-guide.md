@@ -50,10 +50,10 @@ The receiver picker browses Bonjour services automatically while this screen is 
 
 ## HaishinKit Example integration
 
-Check out VQMetrix beside HaishinKit.kt, then build its Example. A VQMetrix button appears
-on Preference and opens the same material-creation activity. Set Gradle property
-`vqmetrixDir` to the `VQMetrix/Android/producer` directory for another layout. The integration
-is optional when that checkout is unavailable. UI and file sharing live in HaishinKit.kt/app/vqmetrix; capture, encoding, packaging, upload and discovery live in VQMetrix/Android/producer.
+The Example consumes `com.github.HaishinKit.VQMetrix:transfer:1.0.0` from JitPack.
+No VQMetrix checkout is required for a normal Example build. Capture, replay encoding
+and UI live in HaishinKit.kt/app/vqmetrix; upload and discovery live in the published AAR.
+For source development, set `vqmetrixTransferDir` to VQMetrix/Android/transfer.
 
 ## Interpreting results
 
@@ -78,7 +78,7 @@ These APIs are not yet assumed to exist in a published HaishinKit release.
 macOS: `brew install libvmaf pkgconf`, then `ruby Scripts/build_app.rb`.
 Android: `cd ../HaishinKit.kt && ./gradlew :app:assembleDebug` with JDK 17+ and SDK 37.
 
-Tags such as `v0.1.0` trigger app builds and documentation generation. macOS ZIP, Android
+The `1.0.0` tag trigger app builds and documentation generation. macOS ZIP, Android
 development APK, and offline API documentation are attached to GitHub Release. The
 macOS app is ad hoc signed and not notarized. Android uses debug signing; a stable
 release signing key is required before offering an upgradeable production channel.
@@ -104,3 +104,11 @@ These are sampled post-composition frames replayed with a CFR timeline, not the 
 The port is editable while reception is stopped. Stop receiving closes incoming connections,
 but accepted jobs keep evaluating. HTTP video/token traffic is unencrypted; the built-in
 receiver is intended for trusted LAN development. It does not provide WAN HTTPS hosting.
+
+## Learn about scores
+
+See the [English score guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrixcore/understandingvmaf/) or [日本語ガイド](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrixcore/understandingvmaf-japanese/). The Mac sidebar and Help menu open these guides on GitHub Pages. Score bands are practical starting points rather than universal perceptual thresholds.
+
+## Sender performance
+
+Android Example also records replay processing time, per-frame input/output latency, app CPU time, sampled memory and OS thermal state. Open Sender performance in History and expand Performance timeline. These are sender-reported measurements of offline replay, not a live-stream stability guarantee. CPU/memory cover the whole app. See the [performance guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrixcore/performancemetrics/) for units, sampling and iOS schema compatibility.
