@@ -254,7 +254,7 @@ index 00000000..8b2fe07f
 +</resources>
 diff --git a/app/vqmetrix/README.md b/app/vqmetrix/README.md
 new file mode 100644
-index 00000000..9805fb9b
+index 00000000..1fce5246
 --- /dev/null
 +++ b/app/vqmetrix/README.md
 @@ -0,0 +1,31 @@
@@ -276,7 +276,7 @@ index 00000000..9805fb9b
 +
 +## 📦 Dependency
 +
-+The module consumes `com.github.HaishinKit.VQMetrix:transfer:1.0.0` from JitPack.
++The module consumes `com.github.HaishinKit:VQMetrix:1.0.0` from JitPack.
 +No neighboring VQMetrix checkout is required. For development use
 +`-PvqmetrixTransferDir=/path/to/VQMetrix/Android/transfer`; a test Maven repository can be
 +selected with `-PvqmetrixRepository=/path/to/repository`.
@@ -291,7 +291,7 @@ index 00000000..9805fb9b
 +See the [API reference and guides](https://haishinkit.github.io/VQMetrix/) for details.
 diff --git a/app/vqmetrix/build.gradle.kts b/app/vqmetrix/build.gradle.kts
 new file mode 100644
-index 00000000..cf8fab26
+index 00000000..572aa39a
 --- /dev/null
 +++ b/app/vqmetrix/build.gradle.kts
 @@ -0,0 +1,42 @@
@@ -325,7 +325,7 @@ index 00000000..cf8fab26
 +        implementation(project(":vqmetrix-transfer"))
 +    } else {
 +        implementation(
-+            "com.github.HaishinKit.VQMetrix:transfer:$transferVersion",
++            "com.github.HaishinKit:VQMetrix:$transferVersion",
 +        )
 +    }
 +    testImplementation(libs.junit)
@@ -2327,7 +2327,7 @@ index 00000000..384d98a9
 +    }
 +}
 diff --git a/settings.gradle.kts b/settings.gradle.kts
-index 0b9a8225..3f8a1b31 100644
+index 0b9a8225..66139ec7 100644
 --- a/settings.gradle.kts
 +++ b/settings.gradle.kts
 @@ -17,6 +17,12 @@ dependencyResolutionManagement {
@@ -2338,7 +2338,7 @@ index 0b9a8225..3f8a1b31 100644
 +            forRepository {
 +                maven { url = uri(providers.gradleProperty("vqmetrixRepository").orElse("https://jitpack.io").get()) }
 +            }
-+            filter { includeGroup("com.github.HaishinKit.VQMetrix") }
++            filter { includeModule("com.github.HaishinKit", "VQMetrix") }
 +        }
      }
  }

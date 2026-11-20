@@ -25,7 +25,7 @@ In the consuming module:
 
 ```kotlin
 dependencies {
-    implementation("com.github.HaishinKit.VQMetrix:transfer:1.0.0")
+    implementation("com.github.HaishinKit:VQMetrix:1.0.0")
 }
 ```
 

@@ -50,7 +50,7 @@ The receiver picker browses Bonjour services automatically while this screen is 
 
 ## HaishinKit Example integration
 
-The Example consumes `com.github.HaishinKit.VQMetrix:transfer:1.0.0` from JitPack.
+The Example consumes `com.github.HaishinKit:VQMetrix:1.0.0` from JitPack.
 No VQMetrix checkout is required for a normal Example build. Capture, replay encoding
 and UI live in HaishinKit.kt/app/vqmetrix; upload and discovery live in the published AAR.
 For source development, set `vqmetrixTransferDir` to VQMetrix/Android/transfer.

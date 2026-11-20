@@ -117,7 +117,7 @@ jobs:
           ../HaishinKit.kt/gradlew -p ../HaishinKit.kt :app:assembleDebug :vqmetrix-example:testDebugUnitTest -PappVersionName="$APP_VERSION" -PvqmetrixTransferDir="$PWD/Android/transfer"
           cp ../HaishinKit.kt/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/HaishinKit-Example-debug.apk"
           cp "Android/transfer/build/outputs/aar/transfer-release.aar" "$RUNNER_TEMP/VQMetrix-transfer.aar"
-          cp "Android/build/maven-repository/com/github/HaishinKit/VQMetrix/transfer/$APP_VERSION/transfer-$APP_VERSION-sources.jar" "$RUNNER_TEMP/VQMetrix-transfer-sources.jar"
+          cp "Android/build/maven-repository/com/github/HaishinKit/VQMetrix/$APP_VERSION/VQMetrix-$APP_VERSION-sources.jar" "$RUNNER_TEMP/VQMetrix-transfer-sources.jar"
           cp "Android/transfer/build/publications/release/pom-default.xml" "$RUNNER_TEMP/VQMetrix-transfer.pom"
           mkdir -p "$RUNNER_TEMP/android-reference/android"
           cp -R Android/transfer/build/dokka/html/. "$RUNNER_TEMP/android-reference/android/"

@@ -24,6 +24,6 @@ Request local-network permission on Android versions that require it.
 
 ## Distribution
 
-JitPack coordinate: `com.github.HaishinKit.VQMetrix:transfer:1.0.0`.
+JitPack coordinate: `com.github.HaishinKit:VQMetrix:1.0.0`.
 Requires Android API 26+. Capture/encoding UI and examples live in HaishinKit.kt, not this AAR.
 See the repository's transfer guide for package layout, checksums, frame maps and receiver limits.

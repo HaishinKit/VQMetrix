@@ -14,7 +14,7 @@ The tag workflow tests and packages:
 - Swift DocC and Kotlin Dokka, combined into `api-documentation.tar.gz`.
 - SHA256SUMS.txt for the release assets.
 
-The Android artifact is `com.github.HaishinKit.VQMetrix:transfer:1.0.0` on JitPack.
+The Android artifact is `com.github.HaishinKit:VQMetrix:1.0.0` on JitPack.
 It does not depend on HaishinKit. Capture/encoding implementations belong to the SDK
 Example. Standard `maven-publish` metadata allows other Maven repositories to be added
 later; Maven Central still requires its own account, namespace and signing setup.

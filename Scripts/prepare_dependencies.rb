@@ -12,7 +12,7 @@ requested.each do |kind|
   marker = kind == 'swift' ? 'HaishinKit/Sources/Codec/VideoCodecProbe.swift' : 'app/vqmetrix/src/main/java/com/haishinkit/app/vqmetrix/MixerCapture.kt'
   ready = File.file?(File.join(directory, marker))
   if kind == 'android' && ready
-    ready = File.read(File.join(directory, 'app/vqmetrix/build.gradle.kts')).include?('com.github.HaishinKit.VQMetrix:transfer:')
+    ready = File.read(File.join(directory, 'app/vqmetrix/build.gradle.kts')).include?('com.github.HaishinKit:VQMetrix:')
   end
   next if ready
   head,status = Open3.capture2('git','rev-parse','HEAD', chdir: directory)

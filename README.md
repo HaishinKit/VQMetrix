@@ -31,7 +31,7 @@ evaluated serially, and saved to History with HTML report export.
 Add JitPack to the consuming project's repositories, then use:
 
 ```kotlin
-implementation("com.github.HaishinKit.VQMetrix:transfer:1.0.0")
+implementation("com.github.HaishinKit:VQMetrix:1.0.0")
 ```
 
 See [Android installation](Android/README.md) for the complete repository setup.

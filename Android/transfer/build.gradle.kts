@@ -6,7 +6,7 @@ plugins {
 }
 val releaseVersion = providers.gradleProperty("publishVersion").orElse(providers.provider { projectDir.resolve("../../VERSION").readText().trim() }).get()
 require(releaseVersion.matches(Regex("(?:[0-9]+[.][0-9]+[.][0-9]+(?:-[0-9A-Za-z.-]+)?|[0-9a-f]{7,40})")))
-group = "com.github.HaishinKit.VQMetrix"
+group = "com.github.HaishinKit"
 version = releaseVersion
 
 android {
@@ -36,7 +36,7 @@ afterEvaluate {
         publications {
             create<MavenPublication>("release") {
                 from(components["release"])
-                artifactId = "transfer"
+                artifactId = "VQMetrix"
                 pom {
                     name.set("VQMetrix Android Transfer")
                     description.set("LAN upload and Bonjour discovery for VQMetrix evaluation samples")
