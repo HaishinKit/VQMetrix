@@ -87,7 +87,7 @@ is experimental; capture availability depends on the device and environment.
 
 ## 📦 Development builds
 
-The `1.0.0` tag attaches a macOS ZIP, Android transfer library, API documentation, and
+The `1.0.1` tag attaches a macOS ZIP, Android transfer library, API documentation, and
 checksums to [GitHub Release](https://github.com/HaishinKit/VQMetrix/releases). macOS builds
 are ad hoc signed and not notarized. Android Example APK distribution is managed by HaishinKit.kt.
 
@@ -101,7 +101,7 @@ The download is ad hoc signed and **not notarized by Apple**, so macOS may show 
 
 See [Apple’s instructions](https://support.apple.com/en-us/102445). This permits this app; do not disable Gatekeeper globally. A warning that malware was detected or the app is damaged is a different issue.
 
-The next release adds in-app update checks. Users of 1.0.0 will need one manual update;
+Version 1.0.1 adds in-app update checks. Users of 1.0.0 need one manual update;
 see [automatic updates](docs/automatic-updates.md).
 
 ## ⚖️ Licenses

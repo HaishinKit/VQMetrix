@@ -1,7 +1,7 @@
 # Automatic macOS updates
 
-The next release after 1.0.0 includes Sparkle 2.10.1. Existing 1.0.0 installations
-must download that release manually once; the published 1.0.0 binary has no updater.
+Version 1.0.1 includes Sparkle 2.10.1. Existing 1.0.0 installations
+must download 1.0.1 manually once; the published 1.0.0 binary has no updater.
 
 The VQMetrix menu provides **Check for Updates…** and **Automatically check for updates**
 (English and Japanese). Sparkle asks for automatic-check permission, and users can change
@@ -14,7 +14,7 @@ these controls.
 `Support/updates.json` contains the public Ed25519 key, HTTPS feed URL, and local
 Keychain account name. It never contains the private key. The feed is the `appcast.xml`
 asset of the latest stable GitHub Release, separate from the LP and API documentation.
-The first updater-enabled release creates that asset; until then the feed is unavailable.
+Version 1.0.1 is the first updater-enabled release and publishes that feed.
 
 A stable numeric tag runs `Scripts/build_appcast.rb` after packaging. Sparkle generates
 the archive signature and signed feed, including OS/architecture requirements. The helper

@@ -1,7 +1,7 @@
 # Building and releasing VQMetrix
 
 The release version is stored in `VERSION`. Use the same value for the Git tag,
-application version and Android dependency: **1.0.0**, without a `v` prefix. A prefix is
+application version and Android dependency: **1.0.1**, without a `v` prefix. A prefix is
 only a tag convention; on JitPack it also becomes part of the requested version.
 
 ## Release contents

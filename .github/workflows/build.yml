@@ -26,7 +26,7 @@ jobs:
       - id: versions
         name: Resolve pinned versions
         env:
-          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '1.0.0' }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: /usr/bin/ruby Scripts/ci_versions.rb
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -95,7 +95,7 @@ jobs:
       - id: versions
         name: Resolve pinned versions
         env:
-          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '1.0.0' }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: /usr/bin/ruby Scripts/ci_versions.rb
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -169,12 +169,12 @@ jobs:
           path: ${{ runner.temp }}/artifacts
       - name: Assemble API site
         env:
-          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '1.0.0' }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
           mkdir -p "$RUNNER_TEMP/site"
           tar -xzf "$RUNNER_TEMP/artifacts/swift-reference.tar.gz" -C "$RUNNER_TEMP/site"
           tar -xzf "$RUNNER_TEMP/artifacts/android-reference.tar.gz" -C "$RUNNER_TEMP/site"
-          ruby Scripts/build_documentation_site.rb "$RUNNER_TEMP/site" "$RELEASE_TAG"
+          ruby Scripts/build_documentation_site.rb "$RUNNER_TEMP/site" "${RELEASE_TAG:-$(cat VERSION)}"
           tar -czf "$RUNNER_TEMP/api-documentation.tar.gz" -C "$RUNNER_TEMP/site" .
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
