@@ -91,6 +91,16 @@ The `1.0.0` tag attaches a macOS ZIP, Android transfer library, API documentatio
 checksums to [GitHub Release](https://github.com/HaishinKit/VQMetrix/releases). macOS builds
 are ad hoc signed and not notarized. Android Example APK distribution is managed by HaishinKit.kt.
 
+## 🔓 First launch on macOS
+
+The download is ad hoc signed and **not notarized by Apple**, so macOS may show “Apple could not verify VQMetrix is free of malware.” If you trust the download from this repository:
+
+1. Extract the ZIP, move VQMetrix to Applications, and try opening it once.
+2. Open **System Settings → Privacy & Security**, then select **Open Anyway** for VQMetrix.
+3. Confirm **Open** and authenticate if prompted.
+
+See [Apple’s instructions](https://support.apple.com/en-us/102445). This permits this app; do not disable Gatekeeper globally. A warning that malware was detected or the app is damaged is a different issue.
+
 ## ⚖️ Licenses
 
 VQMetrix and HaishinKit use BSD-3-Clause. libvmaf uses
