@@ -115,4 +115,45 @@ struct LiveBenchmarkTests {
         }
     }
 
+    @Test func offlineReplayAndSearchPreserveAllFrames() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let input = directory.appendingPathComponent("search.mp4")
+        try await fixture(input)
+        let engine = LiveBenchmark()
+        engine.start(input: input, settings: BenchmarkSettings(codec: .h264, bitrate: 500_000), duration: 3.2,
+            offline: true, outputDirectory: directory.appendingPathComponent("trial"))
+        try await wait { !engine.isRunning }
+        #expect(engine.errorMessage == nil)
+        #expect(engine.inputFrames == 32 && engine.scores.count == 32)
+        let search = BitrateSearch()
+        var configuration = BitrateSearchConfiguration()
+        configuration.target = 0; configuration.sampleSeconds = 3.2
+        search.start(input: input, settings: BenchmarkSettings(codec: .h264, bitrate: 500_000), configuration: configuration, engine: engine)
+        try await wait { !search.isRunning }
+        let report = try #require(search.report)
+        #expect(report.status == .lowerBoundReached && report.recommendedBitrate == configuration.minimumBitrate)
+        #expect(report.trials.count == 2 && report.trials.allSatisfy { $0.frames == 32 })
+        #expect(report.trials.last?.confirmation == true)
+        let output = try #require(search.resultDirectory)
+        defer { try? FileManager.default.removeItem(at: output) }
+        let saved = try JSONDecoder().decode(SavedRun.self, from: Data(contentsOf: output.appendingPathComponent("live-summary.json")))
+        #expect(saved.completeEvaluation && saved.bitrateSearch?.referenceSHA256.count == 64)
+        #expect(saved.bitrateSearch?.settings.bitrate == configuration.minimumBitrate)
+        let html = ReportRenderer.html(run: saved, annotation: RunAnnotation(), date: Date(), id: "search", language: .english, targetScore: 99)
+        #expect(html.contains("Confirmation") && html.contains("Target mean VMAF: 0.000"))
+        #expect(!html.contains("Target VMAF: 99.00"))
+        let cancelled = BitrateSearch()
+        cancelled.start(input: input, settings: BenchmarkSettings(codec: .h264, bitrate: 500_000), configuration: configuration, engine: engine)
+        cancelled.cancel()
+        try await wait { !cancelled.isRunning }
+        #expect(cancelled.report?.status == .cancelled && cancelled.report?.recommendedBitrate == nil)
+        if let cancelledOutput = cancelled.resultDirectory {
+            defer { try? FileManager.default.removeItem(at: cancelledOutput) }
+            let stopped = try JSONDecoder().decode(SavedRun.self, from: Data(contentsOf: cancelledOutput.appendingPathComponent("live-summary.json")))
+            #expect(stopped.stoppedByUser && !stopped.completeEvaluation)
+        }
+    }
+
 }

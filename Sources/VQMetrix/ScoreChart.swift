@@ -61,6 +61,7 @@ struct ScoreChart: View, Equatable {
 
 struct ScoreTargetControl: View {
     let language: AppLanguage
+    var isSearch = false
     @AppStorage("vmafTargetScore") private var targetScore = 90.0
     private var value: Binding<Double> {
         Binding(get: { ScoreBandChart.target(targetScore) }, set: { targetScore = ScoreBandChart.target($0) })
@@ -72,7 +73,7 @@ struct ScoreTargetControl: View {
                 .frame(width: 60).monospacedDigit()
             Stepper(language.text("Target VMAF"), value: value, in: 0...100, step: 0.5).labelsHidden()
                 .fixedSize().accessibilityLabel(language.text("Target VMAF"))
-            Text(language.text("Reference line only; measurements are unchanged."))
+            Text(language.text(isSearch ? "Target for mean VMAF across the fixed sample." : "Reference line only; measurements are unchanged."))
                 .font(.caption).foregroundStyle(.secondary)
             Spacer()
         }

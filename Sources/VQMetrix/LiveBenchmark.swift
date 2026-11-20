@@ -80,12 +80,19 @@ private final class LiveMixerTap: MediaMixerOutput, @unchecked Sendable {
     }
 }
 
+@MainActor
+private final class ReplayProgress { var frames = 0; var failure: String? }
+
+@MainActor
+private final class CaptureProgress { var lastFrameAt = ProcessInfo.processInfo.systemUptime; var failure: String? }
+
 /// One constant codec/bitrate segment. All VideoToolbox access is on MainActor;
 /// feature extraction and prediction run on a separate bounded worker.
 @MainActor
 private final class LiveSegment {
     let settings: BenchmarkSettings
     let index: Int
+    private let replayProgress = ReplayProgress()
     private let encoder = VideoCodecProbe()
     private let decoder = VideoCodecProbe()
     private let pairs: AsyncStream<EvaluationPair>.Continuation
@@ -112,7 +119,7 @@ private final class LiveSegment {
     private let onDecoded: @MainActor (CMSampleBuffer) -> Void
 
     init(settings: BenchmarkSettings, index: Int, width: Int, height: Int, fps: Float,
-         directory: URL, onDecoded: @escaping @MainActor (CMSampleBuffer) -> Void,
+         directory: URL, offline: Bool = false, onDecoded: @escaping @MainActor (CMSampleBuffer) -> Void,
          onScores: @escaping @Sendable ([QualityPoint]) async -> Void) {
         self.referenceWidth = width
         self.referenceHeight = height
@@ -121,33 +128,40 @@ private final class LiveSegment {
         self.onDecoded = onDecoded
         let (stream, continuation) = AsyncStream<EvaluationPair>.makeStream(bufferingPolicy: .bufferingOldest(16))
         pairs = continuation
+        let progress = replayProgress
         worker = Task.detached {
-            let evaluator = try VMAFEvaluator(windowFrames: UInt32(max(2, Int(fps.rounded()))))
-            var timestamps: [(pts: Double, arrived: Double)] = []
-            var published = 0
-            func points() -> [QualityPoint] {
-                let now = ProcessInfo.processInfo.systemUptime
-                let result = (published..<evaluator.scores.count).map { position in
-                    QualityPoint(segment: index, index: position, pts: timestamps[position].pts,
-                        score: evaluator.scores[position], settings: settings,
-                        latencyMilliseconds: (now - timestamps[position].arrived) * 1000)
+            do {
+                let evaluator = try VMAFEvaluator(windowFrames: UInt32(max(2, Int(fps.rounded()))))
+                var timestamps: [(pts: Double, arrived: Double)] = []
+                var published = 0
+                func points() -> [QualityPoint] {
+                    let now = ProcessInfo.processInfo.systemUptime
+                    let result = (published..<evaluator.scores.count).map { position in
+                        QualityPoint(segment: index, index: position, pts: timestamps[position].pts,
+                            score: evaluator.scores[position], settings: settings,
+                            latencyMilliseconds: (now - timestamps[position].arrived) * 1000)
+                    }
+                    published = evaluator.scores.count
+                    return result
                 }
-                published = evaluator.scores.count
-                return result
+                let scaler = try EvaluationScaler()
+                for await pair in stream {
+                    timestamps.append((pair.pts, pair.arrived))
+                    _ = try evaluator.submit(reference: pair.reference, decoded: scaler.match(pair.decoded, to: pair.reference))
+                    if offline { await MainActor.run { progress.frames += 1 } }
+                    let batch = points()
+                    if !batch.isEmpty { await onScores(batch) }
+                }
+                if !timestamps.isEmpty {
+                    try evaluator.finish(output: directory.appendingPathComponent("segment-\(index + 1).json").path)
+                    let batch = points()
+                    if !batch.isEmpty { await onScores(batch) }
+                }
+                return evaluator.scores
+            } catch {
+                await MainActor.run { progress.failure = String(describing: error) }
+                throw error
             }
-            let scaler = try EvaluationScaler()
-            for await pair in stream {
-                timestamps.append((pair.pts, pair.arrived))
-                _ = try evaluator.submit(reference: pair.reference, decoded: scaler.match(pair.decoded, to: pair.reference))
-                let batch = points()
-                if !batch.isEmpty { await onScores(batch) }
-            }
-            if !timestamps.isEmpty {
-                try evaluator.finish(output: directory.appendingPathComponent("segment-\(index + 1).json").path)
-                let batch = points()
-                if !batch.isEmpty { await onScores(batch) }
-            }
-            return evaluator.scores
         }
         let outputSize = settings.resolution.dimensions(width: width, height: height)
         encoder.settings = VideoCodecSettings(videoSize: CGSize(width: outputSize.width, height: outputSize.height),
@@ -194,6 +208,17 @@ private final class LiveSegment {
         if firstPTS == nil { firstPTS = pts }
         lastPTS = pts
         encoder.append(frame.sample)
+    }
+
+    func appendForReplay(_ frame: VideoFrame) async throws {
+        append(frame)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+        while inputCount - replayProgress.frames >= 8 {
+            try Task.checkCancellation()
+            if let failure = replayProgress.failure { throw QualityError(failure) }
+            guard ContinuousClock.now < deadline else { throw QualityError("Offline encoder or evaluation timed out.") }
+            try await Task.sleep(for: .milliseconds(2))
+        }
     }
 
     private func receive(_ sample: CMSampleBuffer) {
@@ -272,6 +297,7 @@ package final class LiveBenchmark: ObservableObject {
     private var startedAtDate: Date?
     private var pending: BenchmarkSettings?
     private var stopRequested = false
+    private var offlineReplay = false
     private var runner: Task<Void, Never>?
     private var segment: LiveSegment?
 
@@ -284,17 +310,18 @@ package final class LiveBenchmark: ObservableObject {
         return values.isEmpty ? nil : values.reduce(0) { $0 + $1.score } / Double(values.count)
     }
 
-    package func start(input: URL, settings: BenchmarkSettings, duration: Double) {
+    package func start(input: URL, settings: BenchmarkSettings, duration: Double, offline: Bool = false, outputDirectory: URL? = nil) {
         guard !isRunning, settings.isValid, duration.isFinite, duration > 0, duration <= 300 else { return }
         scores = []; reports = []; decodedFrames = 0; inputFrames = 0; currentPTS = 0
         sourceSample = nil; decodedSample = nil; errorMessage = nil; resultDirectory = nil
         startedAtDate = Date(); activeSettings = settings; activeSegment = 0; pending = nil; stopRequested = false
         isApplying = false; isRunning = true; setStatus("Preparing video…")
-        runner = Task { await run(input: input, initialSettings: settings, duration: duration) }
+        offlineReplay = offline
+        runner = Task { await run(input: input, initialSettings: settings, duration: duration, offline: offline, outputDirectory: outputDirectory) }
     }
 
     package func apply(_ settings: BenchmarkSettings) {
-        guard isRunning, !stopRequested, settings.isValid else { return }
+        guard isRunning, !stopRequested, !offlineReplay, settings.isValid else { return }
         pending = settings
         isApplying = true
         setStatus("Applying settings…")
@@ -306,9 +333,9 @@ package final class LiveBenchmark: ObservableObject {
         setStatus("Finalizing scores…")
     }
 
-    private func newSegment(settings: BenchmarkSettings, width: Int, height: Int, fps: Float, directory: URL) -> LiveSegment {
+    private func newSegment(settings: BenchmarkSettings, width: Int, height: Int, fps: Float, directory: URL, offline: Bool = false) -> LiveSegment {
         LiveSegment(settings: settings, index: activeSegment, width: width, height: height, fps: fps,
-            directory: directory, onDecoded: { [weak self] sample in
+            directory: directory, offline: offline, onDecoded: { [weak self] sample in
                 self?.decodedSample = sample
                 self?.decodedFrames += 1
             }, onScores: { [weak self] batch in
@@ -316,11 +343,12 @@ package final class LiveBenchmark: ObservableObject {
             })
     }
 
-    private func run(input: URL, initialSettings: BenchmarkSettings, duration: Double) async {
+    private func run(input: URL, initialSettings: BenchmarkSettings, duration: Double, offline: Bool, outputDirectory: URL?) async {
         let mixer = MediaMixer(captureSessionMode: .manual)
         let tap = LiveMixerTap()
         var tapTask: Task<Void, Never>?
         var processed = 0
+        var forwardFailure: String?
         var reader: AVAssetReader?
         var startedMixer = false
         defer {
@@ -333,7 +361,7 @@ package final class LiveBenchmark: ObservableObject {
         do {
             let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                 appropriateFor: nil, create: true)
-            let directory = base.appendingPathComponent("VQMetrix/Results/\(UUID().uuidString)", isDirectory: true)
+            let directory = outputDirectory ?? base.appendingPathComponent("VQMetrix/Results/\(UUID().uuidString)", isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             resultDirectory = directory
             let asset = AVURLAsset(url: input)
@@ -360,14 +388,17 @@ package final class LiveBenchmark: ObservableObject {
             output.alwaysCopiesSampleData = false
             source.add(output)
             guard source.startReading() else { throw source.error ?? QualityError("Could not read the video.") }
-            segment = newSegment(settings: initialSettings, width: width, height: height, fps: fps, directory: directory)
+            segment = newSegment(settings: initialSettings, width: width, height: height, fps: fps, directory: directory, offline: offline)
             await mixer.addOutput(tap)
             await mixer.startRunning()
             startedMixer = true
             tapTask = Task { @MainActor [weak self] in
                 for await frame in tap.stream {
                     self?.sourceSample = frame.sample
-                    self?.segment?.append(frame)
+                    if offline {
+                        do { try await self?.segment?.appendForReplay(frame) }
+                        catch { forwardFailure = String(describing: error); tap.finish(); break }
+                    } else { self?.segment?.append(frame) }
                     processed += 1
                 }
             }
@@ -405,8 +436,17 @@ package final class LiveBenchmark: ObservableObject {
                     isApplying = pending != nil
                     setStatus("Measuring · %@", activeSettings?.label ?? "")
                 }
-                if playbackStart == nil { playbackStart = clock.now }
-                try await clock.sleep(until: playbackStart!.advanced(by: .seconds(elapsed)))
+                if offline {
+                    let deadline = clock.now.advanced(by: .seconds(25))
+                    while processed < inputFrames {
+                        if let forwardFailure { throw QualityError(forwardFailure) }
+                        guard clock.now < deadline else { throw QualityError("Offline mixer timed out.") }
+                        try await Task.sleep(for: .milliseconds(2))
+                    }
+                } else {
+                    if playbackStart == nil { playbackStart = clock.now }
+                    try await clock.sleep(until: playbackStart!.advanced(by: .seconds(elapsed)))
+                }
                 if stopRequested { break }
                 var timing = CMSampleTimingInfo(duration: sample.duration,
                     presentationTimeStamp: CMTime(seconds: elapsed + 1, preferredTimescale: 1_000_000_000), decodeTimeStamp: .invalid)
@@ -420,7 +460,7 @@ package final class LiveBenchmark: ObservableObject {
                 lastPTS = elapsed
             }
             if source.status == .failed { throw source.error ?? QualityError("Could not read the video.") }
-            let deadline = clock.now.advanced(by: .seconds(2))
+            let deadline = clock.now.advanced(by: .seconds(offline ? 25 : 2))
             while processed + tap.counts().dropped < inputFrames, clock.now < deadline {
                 try await Task.sleep(for: .milliseconds(2))
             }
@@ -429,6 +469,7 @@ package final class LiveBenchmark: ObservableObject {
             startedMixer = false
             tap.continuation.finish()
             await tapTask?.value
+            if let forwardFailure { throw QualityError(forwardFailure) }
             if let segment { reports.append(try await segment.finish()) }
             try saveRun(input: input.path, sourceKind: "file", sourceName: input.lastPathComponent,
                 mixerDropped: tap.counts().dropped, undelivered: inputFrames - tap.counts().received)
@@ -466,6 +507,7 @@ package struct SavedRun: Codable, Sendable {
     package var format: String? = nil
     package var failure: String? = nil
     package var senderPerformance: [SenderPerformance]? = nil
+    var bitrateSearch: BitrateSearchReport? = nil
 
 }
 
@@ -669,4 +711,89 @@ extension LiveBenchmark {
 
 package extension Notification.Name {
     static let benchmarkSaved = Notification.Name("VQMetrix.benchmarkSaved")
+}
+
+extension LiveBenchmark {
+    /// Record once, then replay exactly this file for every search candidate.
+    /// ProRes is a high-quality acquisition reference, not a raw-camera quality claim.
+    package static func recordSearchReference(cameraID: String, duration: Double, output: URL,
+        cancelled: @escaping @MainActor () -> Bool, preview: @escaping @MainActor (CMSampleBuffer) -> Void) async throws {
+        let granted: Bool
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: granted = true
+        case .notDetermined: granted = await AVCaptureDevice.requestAccess(for: .video)
+        default: granted = false
+        }
+        guard granted else { throw QualityError("Camera access is disabled. Allow VQMetrix in System Settings > Privacy & Security > Camera.") }
+        if cancelled() { throw CancellationError() }
+        guard let device = AVCaptureDevice(uniqueID: cameraID), device.isConnected else {
+            throw QualityError("The selected camera is unavailable. Refresh the camera list.")
+        }
+        let mixer = MediaMixer(captureSessionMode: .single)
+        let tap = LiveMixerTap()
+        var writer: AVAssetWriter?
+        var input: AVAssetWriterInput?
+        var watchdog: Task<Void, Never>?
+        var timeline = CameraTimeline()
+        let progress = CaptureProgress()
+        var written = 0
+        func stopCapture() async {
+            watchdog?.cancel(); tap.finish()
+            await mixer.removeOutput(tap); await mixer.stopCapturing(); await mixer.stopRunning()
+            try? await mixer.attachVideo(nil)
+        }
+        do {
+            await mixer.setSessionPreset(.vga640x480)
+            try await mixer.attachVideo(device) { try $0.setFrameRate(30) }
+            await mixer.addOutput(tap); await mixer.startRunning()
+            watchdog = Task { @MainActor in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+                    if cancelled() { tap.finish(); return }
+                    if ProcessInfo.processInfo.systemUptime - progress.lastFrameAt > 12 {
+                        progress.failure = "The camera stopped delivering frames. Check its connection and try again."
+                        tap.finish(); return
+                    }
+                }
+            }
+            for await frame in tap.stream {
+                if cancelled() { throw CancellationError() }
+                progress.lastFrameAt = ProcessInfo.processInfo.systemUptime
+                let normalized = try timeline.normalize(frame.sample)
+                if normalized.elapsed >= duration { break }
+                preview(normalized.sample)
+                guard let image = normalized.sample.imageBuffer else { continue }
+                if writer == nil {
+                    let width = CVPixelBufferGetWidth(image), height = CVPixelBufferGetHeight(image)
+                    guard width >= 64, height >= 64, width <= 1920, height <= 1080, width % 2 == 0, height % 2 == 0 else {
+                        throw QualityError("Use even SDR dimensions from 64x64 through 1920x1080, at up to 60 fps.")
+                    }
+                    let value = try AVAssetWriter(outputURL: output, fileType: .mov)
+                    let settings: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.proRes422HQ, AVVideoWidthKey: width, AVVideoHeightKey: height]
+                    guard value.canApply(outputSettings: settings, forMediaType: .video) else { throw QualityError("Could not prepare the reference sample.") }
+                    let sink = AVAssetWriterInput(mediaType: .video, outputSettings: settings, sourceFormatHint: frame.sample.formatDescription)
+                    sink.expectsMediaDataInRealTime = true
+                    guard value.canAdd(sink) else { throw QualityError("Could not prepare the reference sample.") }
+                    value.add(sink)
+                    guard value.startWriting() else { throw value.error ?? QualityError("Could not prepare the reference sample.") }
+                    value.startSession(atSourceTime: CMTime(seconds: 1, preferredTimescale: 600))
+                    writer = value; input = sink
+                }
+                if let input, input.isReadyForMoreMediaData {
+                    guard input.append(normalized.sample) else { throw writer?.error ?? QualityError("Could not prepare the reference sample.") }
+                    written += 1
+                }
+            }
+            await stopCapture()
+            if cancelled() { throw CancellationError() }
+            if let failure = progress.failure { throw QualityError(failure) }
+            guard let writer, written > 0 else { throw QualityError("Could not prepare the reference sample.") }
+            input?.markAsFinished(); await writer.finishWriting()
+            guard writer.status == .completed else { throw writer.error ?? QualityError("Could not prepare the reference sample.") }
+        } catch {
+            await stopCapture(); writer?.cancelWriting(); throw error
+        }
+    }
+
+    package func previewReference(_ sample: CMSampleBuffer) { sourceSample = sample; decodedSample = nil }
 }

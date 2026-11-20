@@ -150,8 +150,9 @@ struct HistoryView: View {
                 statistic("Minimum VMAF", values.min().map { String(format: "%.2f", $0) } ?? "—")
                 statistic("Evaluated frames", "\(run.evaluatedFrames) / \(run.inputFrames)")
             }
-            ScoreTargetControl(language: language)
-            ScoreChart(points: run.scores, language: language, targetScore: targetScore).equatable()
+            if let search = run.bitrateSearch { BitrateSearchResultView(report: search, language: language) }
+            else { ScoreTargetControl(language: language) }
+            ScoreChart(points: run.scores, language: language, targetScore: run.bitrateSearch?.configuration.target ?? targetScore).equatable()
             Text(language.text("Encoding settings by segment")).font(.headline)
             ForEach(run.segments, id: \.index) { segment in
                 let label = run.sourceKind == "upload" && segment.encodedProfile == nil ? segment.settings.bitrateLabel : segment.settings.label

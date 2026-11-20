@@ -29,3 +29,5 @@ validate packages and queue evaluation into the shared history/report model.
 ### Encoding experiments
 
 - <doc:EncodingConfiguration>
+
+- <doc:BitrateSearch>

@@ -96,6 +96,7 @@ struct BenchmarkView: View {
     @State private var cameras: [CameraInfo] = []
     @State private var cameraID = ""
     @StateObject private var engine = LiveBenchmark()
+    @StateObject private var search = BitrateSearch()
     @State private var input: URL?
     @State private var duration = 30
     @State private var bitrateMbps = 2.0
@@ -192,6 +193,19 @@ struct BenchmarkView: View {
                     }.disabled(engine.isApplying)
                 }.padding(8)
             }
+            .disabled(search.isRunning)
+            BitrateSearchControls(search: search, language: language,
+                canStart: inputKind == .file ? input != nil : cameras.contains(where: { $0.id == cameraID }),
+                measurementRunning: engine.isRunning, isCamera: inputKind == .camera,
+                start: { configuration in
+                    let fixed = BenchmarkSettings(codec: codec, bitrate: 1_000_000, profile: profile, resolution: resolution)
+                    search.start(input: inputKind == .file ? input : nil,
+                        camera: inputKind == .camera ? cameras.first(where: { $0.id == cameraID }) : nil,
+                        settings: fixed, configuration: configuration, engine: engine)
+                }, useEstimate: { bitrate in
+                    if let fixed = search.report?.settings { codec = fixed.codec; profile = fixed.profile; resolution = fixed.resolution }
+                    bitrateMbps = Double(bitrate) / 1_000_000
+                })
             HStack(spacing: 18) {
                 PreviewPanel(title: language.text("MediaMixer output"), subtitle: language.text("Uncompressed reference"), sample: engine.sourceSample, language: language)
                 PreviewPanel(title: language.text("Encoded output"), subtitle: engine.activeSettings?.label ?? language.text("After encoding and decoding"), sample: engine.decodedSample, language: language)
@@ -202,20 +216,21 @@ struct BenchmarkView: View {
                 Metric(title: language.text("Evaluated / decoded frames"), value: "\(engine.scores.count) / \(engine.decodedFrames)")
                 Metric(title: language.text("Elapsed time"), value: language.text("%@ s", String(format: "%.1f", engine.currentPTS)))
             }.padding(.vertical, 4)
-            ScoreTargetControl(language: language)
+            ScoreTargetControl(language: language).disabled(search.isRunning)
             ScoreChart(points: engine.scores, language: language, targetScore: targetScore).equatable()
             Divider()
             HStack(spacing: 12) {
-                if engine.isRunning { ProgressView().controlSize(.small) }
-                Text(engine.status).font(.callout).lineLimit(2)
+                if engine.isRunning || search.isRunning { ProgressView().controlSize(.small) }
+                Text(search.isRunning ? language.text(search.phase) : engine.status).font(.callout).lineLimit(2)
                 Spacer()
                 Button(language.text("Show results")) {
-                    if let directory = engine.resultDirectory { NSWorkspace.shared.open(directory) }
-                }.disabled(engine.resultDirectory == nil || engine.isRunning)
-                if engine.isRunning {
-                    Button(language.text("Stop"), action: engine.stop)
+                    if let directory = search.resultDirectory ?? engine.resultDirectory { NSWorkspace.shared.open(directory) }
+                }.disabled((search.resultDirectory ?? engine.resultDirectory) == nil || engine.isRunning || search.isRunning)
+                if engine.isRunning || search.isRunning {
+                    Button(language.text("Stop")) { if search.isRunning { search.cancel() } else { engine.stop() } }
                 } else {
                     Button(language.text("Start measurement")) {
+                        search.clear()
                         if let settings {
                             if inputKind == .file, let input { engine.start(input: input, settings: settings, duration: Double(duration)) }
                             else if let camera = cameras.first(where: { $0.id == cameraID }) {
@@ -230,10 +245,11 @@ struct BenchmarkView: View {
         }
         .padding(22)
         .frame(minWidth: 850, minHeight: 780)
+        .onDisappear { search.cancel(); engine.stop() }
         .onAppear { engine.language = language; refreshCameras() }
         .onChange(of: language) { engine.language = $0 }
         .onChange(of: codec) { if !$0.profiles.contains(profile) { profile = .main } }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in engine.stop() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in search.cancel(); engine.stop() }
     }
 }
 
