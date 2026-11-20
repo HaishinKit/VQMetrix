@@ -3,7 +3,7 @@ import Foundation
 package enum AppLanguage: String, CaseIterable, Sendable {
     case system, english, japanese
     private static let resources: Bundle = {
-        if let url = Bundle.main.resourceURL?.appendingPathComponent("VQMetrix_VQMetrixCore.bundle"),
+        if let url = Bundle.main.resourceURL?.appendingPathComponent("VQMetrix_VQMetrix.bundle"),
            let bundle = Bundle(url: url) { return bundle }
         return Bundle.module
     }()

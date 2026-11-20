@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import ZIPFoundation
-@testable import VQMetrixCore
+@testable import VQMetrix
 
 struct UploadTests {
     static func headers(token:String = "secret", length:String = "100", extra:String = "") -> Data {

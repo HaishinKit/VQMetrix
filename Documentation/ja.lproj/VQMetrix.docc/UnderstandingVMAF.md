@@ -57,4 +57,4 @@ macOSの計測は端末内で圧縮・復元します。アップロードした
 - [Netflix VMAF FAQ](https://github.com/Netflix/vmaf/blob/master/resource/doc/faq.md)
 - [Netflix: VMAF, The Journey Continues](https://netflixtechblog.com/vmaf-the-journey-continues-44b51ee9ed12)
 
-英語版は <doc:UnderstandingVMAF> を参照してください。
+[English guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/understandingvmaf/)

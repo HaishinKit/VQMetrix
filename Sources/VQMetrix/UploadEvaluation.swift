@@ -93,7 +93,8 @@ struct UploadEvaluation {
                 guard decoded.copyNextSampleBuffer() == nil, reader.status == .completed else { throw QualityError("Extra frames or incomplete MP4 decode") }
                 try raw.finish()
                 try evaluator.finish(output: output.appendingPathComponent("variant-\(index)-vmaf.json").path)
-                let settings = BenchmarkSettings(codec: variant.codec == "h264" ? .h264 : .hevc, bitrate: variant.targetBitrate)
+                let actualProfile = EncodedProfile.read(descriptions[0])
+                let settings = BenchmarkSettings(codec: variant.codec == "h264" ? .h264 : .hevc, bitrate: variant.targetBitrate, profile: actualProfile ?? .main)
                 for (frame, score) in evaluator.scores.enumerated() {
                     points.append(QualityPoint(segment: index, index: frame, pts: Double(frame)/Double(ref.fpsNumerator), score: score, settings: settings, latencyMilliseconds: 0))
                 }
@@ -102,7 +103,9 @@ struct UploadEvaluation {
                     encodedFrames: ref.frameCount, decodedFrames: ref.frameCount, evaluatedFrames: evaluator.scores.count,
                     evaluationQueueDropped: 0, referenceEvictions: 0, unresolvedReferences: 0, unmatchedDecoded: 0,
                     encodedBytes: bytes, encodedCodec: expectedCodec, firstPTS: 0,
-                    lastPTS: Double(ref.frameCount-1)/Double(ref.fpsNumerator), meanVMAF: evaluator.scores.reduce(0,+)/Double(evaluator.scores.count)))
+                    lastPTS: Double(ref.frameCount-1)/Double(ref.fpsNumerator), meanVMAF: evaluator.scores.reduce(0,+)/Double(evaluator.scores.count),
+                    encodedWidth: Int(dimensions.width), encodedHeight: Int(dimensions.height), encodedProfile: actualProfile?.rawValue,
+                    referenceWidth: ref.width, referenceHeight: ref.height, evaluationScaling: "Native reference dimensions; 8-bit SDR VMAF"))
             }
         } catch { failure = String(describing: error) }
         let run = SavedRun(input: payload.path, model: VMAFEvaluator.modelVersion, libvmafVersion: String(cString: vmaf_version()),

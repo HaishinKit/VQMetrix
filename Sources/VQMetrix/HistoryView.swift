@@ -1,9 +1,9 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
-import VQMetrixCore
 
 struct HistoryView: View {
+    @AppStorage("vmafTargetScore") private var targetScore = 90.0
     let language: AppLanguage
     @State private var entries: [HistoryEntry] = []
     @State private var selection: URL?
@@ -71,7 +71,7 @@ struct HistoryView: View {
         Task {
             do {
                 try await saveDraft()
-                let report = try await HistoryStore.shared.report(selection, language: language)
+                let report = try await HistoryStore.shared.report(selection, language: language, targetScore: targetScore)
                 try report.write(to: output, atomically: true, encoding: .utf8)
                 showStatus("Report exported.")
                 await refresh()
@@ -150,15 +150,22 @@ struct HistoryView: View {
                 statistic("Minimum VMAF", values.min().map { String(format: "%.2f", $0) } ?? "—")
                 statistic("Evaluated frames", "\(run.evaluatedFrames) / \(run.inputFrames)")
             }
-            ScoreChart(points: run.scores, language: language).equatable()
+            ScoreTargetControl(language: language)
+            ScoreChart(points: run.scores, language: language, targetScore: targetScore).equatable()
             Text(language.text("Encoding settings by segment")).font(.headline)
             ForEach(run.segments, id: \.index) { segment in
+                let label = run.sourceKind == "upload" && segment.encodedProfile == nil ? segment.settings.bitrateLabel : segment.settings.label
                 HStack {
-                    Text("\(segment.index + 1). \(segment.settings.label)")
+                    Text("\(segment.index + 1). \(label)")
                     Spacer()
                     Text(segment.meanVMAF.map { String(format: "VMAF %.2f", $0) } ?? "VMAF —")
                     Text("\(segment.evaluatedFrames)/\(segment.inputFrames)").foregroundStyle(.secondary)
                 }.font(.callout)
+                if let width = segment.encodedWidth, let height = segment.encodedHeight,
+                   let referenceWidth = segment.referenceWidth, let referenceHeight = segment.referenceHeight {
+                    Text(language.text("Output %@ × %@ · VMAF at %@ × %@", String(width), String(height), String(referenceWidth), String(referenceHeight)))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
 if let performance = run.senderPerformance, !performance.isEmpty {
     SenderPerformanceView(items:performance,language:language)

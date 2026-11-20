@@ -1,4 +1,8 @@
-# ``VQMetrixCore``
+# VQMetrix
+
+@Metadata {
+    @TechnologyRoot
+}
 
 Measure video compression quality with HaishinKit and libvmaf.
 
@@ -17,8 +21,11 @@ validate packages and queue evaluation into the shared history/report model.
 ### Understanding quality
 
 - <doc:UnderstandingVMAF>
-- <doc:UnderstandingVMAF-Japanese>
 
 ### Device performance
 
 - <doc:PerformanceMetrics>
+
+### Encoding experiments
+
+- <doc:EncodingConfiguration>

@@ -1,7 +1,7 @@
 import AVFoundation
 import Foundation
 import Testing
-@testable import VQMetrixCore
+@testable import VQMetrix
 
 struct VQMetrixTests {
     private func image(width: Int = 256, height: Int = 144, flat: Bool = false, shift: Int = 0) throws -> CVPixelBuffer {

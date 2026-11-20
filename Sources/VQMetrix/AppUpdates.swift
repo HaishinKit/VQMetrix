@@ -2,7 +2,6 @@ import Combine
 import Foundation
 import Sparkle
 import SwiftUI
-import VQMetrixCore
 
 @MainActor
 final class AppUpdates: ObservableObject {

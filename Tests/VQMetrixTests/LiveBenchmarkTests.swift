@@ -1,8 +1,9 @@
 @preconcurrency import AVFoundation
 import Foundation
 import Testing
-@testable import VQMetrixCore
+@testable import VQMetrix
 
+@Suite(.serialized)
 @MainActor
 struct LiveBenchmarkTests {
     private func wait(_ condition: @MainActor () -> Bool) async throws {
@@ -13,10 +14,10 @@ struct LiveBenchmarkTests {
         }
     }
 
-    private func fixture(_ url: URL) async throws {
+    private func fixture(_ url: URL, width: Int = 320, height: Int = 180) async throws {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
-            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 320, AVVideoHeightKey: 180
+            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: width, AVVideoHeightKey: height
         ])
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: nil)
         writer.add(input)
@@ -25,17 +26,17 @@ struct LiveBenchmarkTests {
         for index in 0..<80 {
             try await wait { input.isReadyForMoreMediaData }
             var pixel: CVPixelBuffer?
-            try check(CVPixelBufferCreate(nil, 320, 180, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+            try check(CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
                 [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &pixel), "fixture buffer")
             let buffer = try #require(pixel)
             CVPixelBufferLockBaseAddress(buffer, [])
             let y = try #require(CVPixelBufferGetBaseAddressOfPlane(buffer, 0)).assumingMemoryBound(to: UInt8.self)
             let stride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 0)
-            for row in 0..<180 {
-                for col in 0..<320 { y[row * stride + col] = UInt8(40 + ((col + index * 3) / 16 + row / 16) % 2 * 140) }
+            for row in 0..<height {
+                for col in 0..<width { y[row * stride + col] = UInt8(40 + ((col + index * 3) / 16 + row / 16) % 2 * 140) }
             }
             let uv = try #require(CVPixelBufferGetBaseAddressOfPlane(buffer, 1))
-            memset(uv, 128, CVPixelBufferGetBytesPerRowOfPlane(buffer, 1) * 90)
+            memset(uv, 128, CVPixelBufferGetBytesPerRowOfPlane(buffer, 1) * (height / 2))
             CVPixelBufferUnlockBaseAddress(buffer, [])
             #expect(adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(index), timescale: 10)))
         }
@@ -56,7 +57,7 @@ struct LiveBenchmarkTests {
         try await wait { engine.decodedFrames >= 5 || !engine.isRunning }
         #expect(engine.errorMessage == nil)
         #expect(engine.isRunning)
-        let hevc = BenchmarkSettings(codec: .hevc, bitrate: 600_000)
+        let hevc = BenchmarkSettings(codec: .hevc, bitrate: 600_000, profile: .main10, resolution: .p360)
         engine.apply(hevc)
         try await wait { (engine.activeSettings == hevc && engine.decodedFrames >= 15) || !engine.isRunning }
         #expect(engine.errorMessage == nil)
@@ -74,6 +75,9 @@ struct LiveBenchmarkTests {
         if reports.count == 3 {
             #expect(reports[0].encodedCodec == kCMVideoCodecType_H264)
             #expect(reports[1].encodedCodec == kCMVideoCodecType_HEVC)
+            #expect(reports[1].encodedWidth == 640 && reports[1].encodedHeight == 360)
+            #expect(reports[1].encodedProfile == "Main 10")
+            #expect(reports[2].encodedWidth == 320 && reports[2].encodedHeight == 180)
             #expect(reports[2].settings == lowerRate)
             #expect(reports.allSatisfy { $0.inputFrames > 0 && $0.inputFrames == $0.encodedFrames && $0.encodedFrames == $0.decodedFrames })
         }
@@ -87,4 +91,28 @@ struct LiveBenchmarkTests {
         #expect(summary?["completeEvaluation"] as? Bool == true)
         #expect((summary?["segments"] as? [Any])?.count == 3)
     }
+    @Test func profileAndResolutionAreVerifiedInEncodedOutput() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("profiles.mp4")
+        try await fixture(url, width: 640, height: 360)
+        for codec in BenchmarkCodec.allCases {
+            for profile in codec.profiles {
+                let engine = LiveBenchmark()
+                let settings = BenchmarkSettings(codec: codec, bitrate: 800_000, profile: profile, resolution: .p180)
+                engine.start(input: url, settings: settings, duration: 0.8)
+                try await wait { !engine.isRunning }
+                #expect(engine.errorMessage == nil, "\(codec.rawValue) \(profile.rawValue): \(engine.errorMessage ?? "")")
+                let report = try #require(engine.reports.first)
+                #expect(report.encodedWidth == 320 && report.encodedHeight == 180)
+                #expect(report.referenceWidth == 640 && report.referenceHeight == 360)
+                #expect(report.encodedProfile == profile.rawValue)
+                #expect(report.evaluatedFrames > 0)
+                #expect(engine.scores.allSatisfy { $0.score.isFinite })
+                if let output = engine.resultDirectory { try? FileManager.default.removeItem(at: output) }
+            }
+        }
+    }
+
 }

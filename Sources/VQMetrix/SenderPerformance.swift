@@ -84,7 +84,7 @@ extension SenderPerformance {
         func number(_ value:Double?) -> String { value.map { $0.formatted(.number.precision(.fractionLength(2)).locale(language.locale)) } ?? "—" }
         let rows = items.map { item in
             let m = item.metrics
-            return "<tr><td>\(ReportRenderer.escape(item.settings.label))<br>\(ReportRenderer.escape(item.codecName ?? ""))</td><td>\(number(m.wallTimeMs))</td><td>\(number(m.throughputFps))</td><td>\(number(m.p95LatencyMs))</td><td>\(number(m.appCpuCores))</td><td>\(number(m.sampledPeakMemoryBytes.map{Double($0)/1_048_576}))</td><td>\(ReportRenderer.escape(m.thermalSummary))</td></tr>"
+            return "<tr><td>\(ReportRenderer.escape(item.settings.bitrateLabel))<br>\(ReportRenderer.escape(item.codecName ?? ""))</td><td>\(number(m.wallTimeMs))</td><td>\(number(m.throughputFps))</td><td>\(number(m.p95LatencyMs))</td><td>\(number(m.appCpuCores))</td><td>\(number(m.sampledPeakMemoryBytes.map{Double($0)/1_048_576}))</td><td>\(ReportRenderer.escape(m.thermalSummary))</td></tr>"
         }.joined()
         let charts = items.map { item in
             let values = item.metrics.frameTimings ?? []
@@ -92,7 +92,7 @@ extension SenderPerformance {
             let maximum = max(1, values.map(\.latencyMs).max() ?? 1)
             let duration = max(1, Double(values.last?.ptsUs ?? 1)/1_000_000)
             let path = values.map { String(format:"%.2f,%.2f",45+Double($0.ptsUs)/1_000_000/duration*810,180-$0.latencyMs/maximum*150) }.joined(separator:" ")
-            return "<h3>\(ReportRenderer.escape(item.settings.label)) · \(t("Input-to-output latency"))</h3><svg viewBox=\"0 0 900 220\" role=\"img\" aria-label=\"\(t("Input-to-output latency"))\"><polyline fill=\"none\" stroke=\"#0077cc\" stroke-width=\"2\" points=\"\(path)\"/><text x=\"5\" y=\"25\">\(number(maximum)) ms</text><text x=\"45\" y=\"205\">0 s</text><text x=\"850\" y=\"205\" text-anchor=\"end\">\(number(duration)) s</text></svg>"
+            return "<h3>\(ReportRenderer.escape(item.settings.bitrateLabel)) · \(t("Input-to-output latency"))</h3><svg viewBox=\"0 0 900 220\" role=\"img\" aria-label=\"\(t("Input-to-output latency"))\"><polyline fill=\"none\" stroke=\"#0077cc\" stroke-width=\"2\" points=\"\(path)\"/><text x=\"5\" y=\"25\">\(number(maximum)) ms</text><text x=\"45\" y=\"205\">0 s</text><text x=\"850\" y=\"205\" text-anchor=\"end\">\(number(duration)) s</text></svg>"
         }.joined()
         return "<h2>\(t("Sender performance"))</h2><p class=\"warning\">\(t("Offline replay speed is not a guarantee of live performance. CPU and memory cover the whole app, including capture and instrumentation."))</p><table><thead><tr><th>\(t("Settings"))</th><th>\(t("Encoding time")) (ms)</th><th>fps</th><th>p95 (ms)</th><th>\(t("App CPU (cores)"))</th><th>\(t("Sampled peak memory")) (MiB)</th><th>\(t("Thermal state"))</th></tr></thead><tbody>\(rows)</tbody></table>\(charts)"
     }

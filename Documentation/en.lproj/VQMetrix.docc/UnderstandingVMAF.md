@@ -67,4 +67,4 @@ mobile-originated clip with it does not automatically select a phone-specific mo
 - [Netflix VMAF FAQ](https://github.com/Netflix/vmaf/blob/master/resource/doc/faq.md)
 - [Netflix: VMAF, The Journey Continues](https://netflixtechblog.com/vmaf-the-journey-continues-44b51ee9ed12)
 
-For Japanese, see <doc:UnderstandingVMAF-Japanese>.
+[日本語版](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/understandingvmaf/)

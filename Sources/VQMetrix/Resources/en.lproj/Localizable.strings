@@ -161,3 +161,12 @@
 
 "Check for Updates…" = "Check for Updates…";
 "Automatically check for updates" = "Automatically check for updates";
+"Profile" = "Profile";
+"Output resolution" = "Output resolution";
+"Fits the source aspect ratio. VMAF is evaluated at source size." = "Fits the source aspect ratio. VMAF is evaluated at source size.";
+"The encoder did not produce the requested profile or dimensions." = "The encoder did not produce the requested profile or dimensions.";
+"Output %@ × %@ · VMAF at %@ × %@" = "Output %@ × %@ · VMAF at %@ × %@";
+"Target VMAF" = "Target VMAF";
+"Target %@" = "Target %@";
+"Score bands are working guidelines." = "Score bands are working guidelines.";
+"Reference line only; measurements are unchanged." = "Reference line only; measurements are unchanged.";

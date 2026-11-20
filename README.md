@@ -18,7 +18,8 @@ The app supports English and Japanese and follows the system appearance.
 
 ![VQMetrix macOS measurement](Assets/Screenshots/macos-measurement.png)
 
-Actual measurement of a synthetic 720p clip, encoded as H.264 at 0.5 Mbps.
+VQMetrix 1.1.0 measuring a synthetic 640×360 clip for 30 seconds, encoded as H.264 Main at 0.5 Mbps.
+The timeline shows five score bands and a target line at 90.
 The displayed scores belong to this run, not a general codec benchmark.
 
 ![VQMetrix macOS device receiver](Assets/Screenshots/macos-receiver.png)
@@ -41,11 +42,11 @@ Capture/encoding UI lives in HaishinKit.kt Example (API 29+).
 
 ## 🚀 Build
 
-App release builds use HaishinKit.swift and HaishinKit.kt beside this checkout at the revisions in
+macOS builds use HaishinKit.swift beside this checkout at the revision in
 [Support/dependencies.json](Support/dependencies.json), then prepare their development adapters:
 
 ```sh
-ruby Scripts/prepare_dependencies.rb
+ruby Scripts/prepare_dependencies.rb swift
 ```
 
 macOS (Swift 6, macOS 13+; the installed libvmaf can require a newer OS):
@@ -59,8 +60,8 @@ open .build/VQMetrix.app
 Android (JDK 17+, SDK 37):
 
 ```sh
-cd ../HaishinKit.kt
-./gradlew :app:assembleDebug
+cd Android
+./gradlew :transfer:assembleRelease
 ```
 
 These use local development checkouts, not published release tags. The adapters and
@@ -69,9 +70,9 @@ for the external artifact and Example integration.
 
 ## 📚 Documentation
 
-[Published documentation](https://haishinkit.github.io/VQMetrix/) · [VMAF score guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrixcore/understandingvmaf/) · [User guide](docs/user-guide.md) · [Transfer protocol](docs/transfer.md) · [Release workflow](docs/releases.md)
+[Published documentation](https://haishinkit.github.io/VQMetrix/) · [VMAF score guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/understandingvmaf/) · [User guide](docs/user-guide.md) · [Transfer protocol](docs/transfer.md) · [Release workflow](docs/releases.md)
 
-Tags generate Swift DocC, Android Dokka, and a combined API-reference archive. Extract
+Tags generate English/Japanese DocC app guides, Android Dokka, and a combined API-reference archive. Extract
 it and run `ruby serve.rb` to read it locally. GitHub Pages hosts the product page and generated reference.
 
 ## 🧪 Verification
@@ -88,7 +89,7 @@ is experimental; capture availability depends on the device and environment.
 
 ## 📦 Development builds
 
-The `1.0.1` tag attaches a macOS ZIP, Android transfer library, API documentation, and
+The `1.1.0` tag attaches a macOS ZIP, Android transfer library, API documentation, and
 checksums to [GitHub Release](https://github.com/HaishinKit/VQMetrix/releases). macOS builds
 are ad hoc signed and not notarized. Android Example APK distribution is managed by HaishinKit.kt.
 

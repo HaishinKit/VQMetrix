@@ -1,7 +1,7 @@
 import AVFoundation
 import Foundation
 import Testing
-@testable import VQMetrixCore
+@testable import VQMetrix
 
 struct HistoryAndLocalizationTests {
     private func run() -> SavedRun {
@@ -48,6 +48,9 @@ struct HistoryAndLocalizationTests {
         #expect(japanese.contains("一部フレーム未評価"))
         #expect(japanese.contains("区間ごとのエンコード設定"))
         #expect(english.contains("<svg"))
+        let targeted = try await store.report(directory, language: .english, targetScore: 92.5)
+        #expect(targeted.contains("92.50"))
+        #expect(targeted.contains("stroke-dasharray"))
         // New index and legacy summary yield the same result.
         try encoder.encode(RunMetadata(run: measurement)).write(to: directory.appendingPathComponent("history.json"))
         #expect(try await store.list().entries.first?.title == annotation.title)
@@ -60,7 +63,7 @@ struct HistoryAndLocalizationTests {
 
     @Test func translationsHaveMatchingKeysAndPlaceholders() throws {
         let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().appendingPathComponent("Sources/VQMetrixCore/Resources")
+            .deletingLastPathComponent().appendingPathComponent("Sources/VQMetrix/Resources")
         let english = try PropertyListSerialization.propertyList(from: Data(contentsOf: source.appendingPathComponent("en.lproj/Localizable.strings")), format: nil) as? [String: String]
         let japanese = try PropertyListSerialization.propertyList(from: Data(contentsOf: source.appendingPathComponent("ja.lproj/Localizable.strings")), format: nil) as? [String: String]
         #expect(Set(english?.keys.map { $0 } ?? []) == Set(japanese?.keys.map { $0 } ?? []))

@@ -47,12 +47,9 @@ jobs:
       - name: Generate Swift reference
         run: |
           mkdir -p "$RUNNER_TEMP/swift-reference"
-          swift package --allow-writing-to-directory "$RUNNER_TEMP/swift-reference" generate-documentation \
-            --target VQMetrixCore --symbol-graph-minimum-access-level internal --disable-indexing \
-            --transform-for-static-hosting --hosting-base-path VQMetrix/swift \
-            --output-path "$RUNNER_TEMP/swift-reference/swift"
+          /usr/bin/ruby Scripts/build_swift_documentation.rb "$RUNNER_TEMP/swift-reference"
           mkdir -p "$RUNNER_TEMP/macos-artifacts"
-          tar -czf "$RUNNER_TEMP/macos-artifacts/swift-reference.tar.gz" -C "$RUNNER_TEMP/swift-reference" swift
+          tar -czf "$RUNNER_TEMP/macos-artifacts/swift-reference.tar.gz" -C "$RUNNER_TEMP/swift-reference" swift ja
           cp .build/VQMetrix-macos-*.zip "$RUNNER_TEMP/macos-artifacts/"
       - name: Sign and verify update feed
         if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
@@ -97,13 +94,6 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: /usr/bin/ruby Scripts/ci_versions.rb
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: true
-          repository: HaishinKit/HaishinKit.kt
-          ref: ${{ steps.versions.outputs.android_revision }}
-          path: HaishinKit.kt
-          persist-credentials: false
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
@@ -114,15 +104,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Install Android SDK
         run: sdkmanager 'platforms;android-37.0' 'build-tools;37.0.0'
-      - name: Prepare development adapter
-        run: /usr/bin/ruby Scripts/prepare_dependencies.rb android
       - name: Build, test, and document Android
         env:
           APP_VERSION: ${{ steps.versions.outputs.version }}
         run: |
           ./Android/gradlew -p Android :transfer:testDebugUnitTest :transfer:lintDebug :transfer:dokkaGenerate :transfer:publishReleasePublicationToVerificationRepository \
             -PpublishVersion="$APP_VERSION"
-          ../HaishinKit.kt/gradlew -p ../HaishinKit.kt :app:assembleDebug :vqmetrix-example:testDebugUnitTest -PappVersionName="$APP_VERSION" -PvqmetrixTransferDir="$PWD/Android/transfer"
           cp "Android/transfer/build/outputs/aar/transfer-release.aar" "$RUNNER_TEMP/VQMetrix-transfer.aar"
           cp "Android/build/maven-repository/com/github/HaishinKit/VQMetrix/$APP_VERSION/VQMetrix-$APP_VERSION-sources.jar" "$RUNNER_TEMP/VQMetrix-transfer-sources.jar"
           cp "Android/transfer/build/publications/release/pom-default.xml" "$RUNNER_TEMP/VQMetrix-transfer.pom"

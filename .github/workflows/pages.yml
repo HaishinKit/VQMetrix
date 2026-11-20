@@ -16,11 +16,27 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.release.outputs.ready }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Check released documentation version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          released_tag=$(gh release view --json tagName --jq .tagName)
+          if [ "$released_tag" = "$(cat VERSION)" ]; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'The versioned release workflow will publish the new documentation.'
+          fi
       - name: Prepare released documentation and landing page
+        if: steps.release.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -30,10 +46,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/site"
           tar -xzf "$RUNNER_TEMP/reference/api-documentation.tar.gz" -C "$RUNNER_TEMP/site"
           /usr/bin/ruby Scripts/build_documentation_site.rb "$RUNNER_TEMP/site" "$release_tag"
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+      - if: steps.release.outputs.ready == 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: ${{ runner.temp }}/site
   deploy:
+    if: needs.build.outputs.ready == 'true'
     needs: build
     runs-on: ubuntu-latest
     permissions:

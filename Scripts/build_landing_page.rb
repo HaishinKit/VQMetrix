@@ -20,7 +20,8 @@ template = ERB.new(File.read(File.join(root, 'docs/site/index.html.erb')))
 %w[en ja].each do |lang|
   t = ->(en, ja) { lang == 'ja' ? ja : en }
   home = lang == 'ja' ? '/VQMetrix/ja/' : '/VQMetrix/'
-  guide = '/VQMetrix/swift/documentation/vqmetrixcore/understandingvmaf' + (lang == 'ja' ? '-japanese/' : '/')
+  documentation_base = lang == 'ja' ? '/VQMetrix/ja/swift/documentation/vqmetrix' : '/VQMetrix/swift/documentation/vqmetrix'
+  guide = documentation_base + '/understandingvmaf/'
   destination = lang == 'ja' ? File.join(output, 'ja') : output
   FileUtils.mkdir_p(destination)
   File.write(File.join(destination, 'index.html'), template.result(binding))

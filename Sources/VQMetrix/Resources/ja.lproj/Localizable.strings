@@ -161,3 +161,12 @@
 
 "Check for Updates…" = "アップデートを確認…";
 "Automatically check for updates" = "アップデートを自動で確認";
+"Profile" = "プロファイル";
+"Output resolution" = "出力解像度";
+"Fits the source aspect ratio. VMAF is evaluated at source size." = "元のアスペクト比を維持します。VMAFは元のサイズで評価します。";
+"The encoder did not produce the requested profile or dimensions." = "要求したプロファイルまたは解像度でエンコードできませんでした。";
+"Output %@ × %@ · VMAF at %@ × %@" = "出力 %@ × %@ · VMAF評価 %@ × %@";
+"Target VMAF" = "目標VMAF";
+"Target %@" = "目標 %@";
+"Score bands are working guidelines." = "スコア帯は試行錯誤の目安です。";
+"Reference line only; measurements are unchanged." = "比較用の基準線です。計測値には影響しません。";

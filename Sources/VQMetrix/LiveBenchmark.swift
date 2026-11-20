@@ -4,27 +4,7 @@ import CVMAF
 @_spi(VideoQuality) import HaishinKit
 import VideoToolbox
 
-package enum BenchmarkCodec: String, CaseIterable, Codable, Sendable {
-    case h264 = "H.264"
-    case hevc = "HEVC"
-
-    var profile: String {
-        switch self {
-        case .h264: kVTProfileLevel_H264_Main_AutoLevel as String
-        case .hevc: kVTProfileLevel_HEVC_Main_AutoLevel as String
-        }
-    }
-}
-
-package struct BenchmarkSettings: Equatable, Codable, Sendable {
-    package var codec: BenchmarkCodec
-    package var bitrate: Int
-    package init(codec: BenchmarkCodec, bitrate: Int) { self.codec = codec; self.bitrate = bitrate }
-    package var label: String { String(format: "%@ · %.2f Mbps", codec.rawValue, Double(bitrate) / 1_000_000) }
-    package var isValid: Bool { bitrate > 0 && bitrate <= 100_000_000 }
-}
-
-package struct QualityPoint: Identifiable, Codable, Sendable {
+package struct QualityPoint: Identifiable, Codable, Sendable, Equatable {
     package let segment: Int
     package let index: Int
     package let pts: Double
@@ -51,6 +31,12 @@ package struct SegmentReport: Codable, Sendable {
     package let firstPTS: Double?
     package let lastPTS: Double?
     package let meanVMAF: Double?
+    package var encodedWidth: Int? = nil
+    package var encodedHeight: Int? = nil
+    package var encodedProfile: String? = nil
+    package var referenceWidth: Int? = nil
+    package var referenceHeight: Int? = nil
+    package var evaluationScaling: String? = nil
 }
 
 private struct VideoFrame: @unchecked Sendable { let sample: CMSampleBuffer }
@@ -114,6 +100,12 @@ private final class LiveSegment {
     private var evicted = 0
     private var unmatched = 0
     private var bytes = 0
+    private var encodedWidth: Int?
+    private var encodedHeight: Int?
+    private var encodedProfile: String?
+    private var encodingFailure: String?
+    private let referenceWidth: Int
+    private let referenceHeight: Int
     private var encodedCodec: UInt32?
     private var firstPTS: Double?
     private var lastPTS: Double?
@@ -122,6 +114,8 @@ private final class LiveSegment {
     init(settings: BenchmarkSettings, index: Int, width: Int, height: Int, fps: Float,
          directory: URL, onDecoded: @escaping @MainActor (CMSampleBuffer) -> Void,
          onScores: @escaping @Sendable ([QualityPoint]) async -> Void) {
+        self.referenceWidth = width
+        self.referenceHeight = height
         self.settings = settings
         self.index = index
         self.onDecoded = onDecoded
@@ -141,9 +135,10 @@ private final class LiveSegment {
                 published = evaluator.scores.count
                 return result
             }
+            let scaler = try EvaluationScaler()
             for await pair in stream {
                 timestamps.append((pair.pts, pair.arrived))
-                _ = try evaluator.submit(reference: pair.reference, decoded: pair.decoded)
+                _ = try evaluator.submit(reference: pair.reference, decoded: scaler.match(pair.decoded, to: pair.reference))
                 let batch = points()
                 if !batch.isEmpty { await onScores(batch) }
             }
@@ -154,8 +149,9 @@ private final class LiveSegment {
             }
             return evaluator.scores
         }
-        encoder.settings = VideoCodecSettings(videoSize: CGSize(width: width, height: height),
-            bitRate: settings.bitrate, profileLevel: settings.codec.profile,
+        let outputSize = settings.resolution.dimensions(width: width, height: height)
+        encoder.settings = VideoCodecSettings(videoSize: CGSize(width: outputSize.width, height: outputSize.height),
+            bitRate: settings.bitrate, profileLevel: settings.profile.level(for: settings.codec), scalingMode: .normal,
             allowFrameReordering: false, expectedFrameRate: Double(fps))
         let encoded = encoder.outputStream
         let decoded = decoder.outputStream
@@ -166,7 +162,15 @@ private final class LiveSegment {
                 guard let self else { return }
                 self.encodedCount += 1
                 self.bytes += sample.totalSampleSize
-                if let format = sample.formatDescription { self.encodedCodec = CMFormatDescriptionGetMediaSubType(format) }
+                if let format = sample.formatDescription {
+                    self.encodedCodec = CMFormatDescriptionGetMediaSubType(format)
+                    let dimensions = CMVideoFormatDescriptionGetDimensions(format)
+                    self.encodedWidth = Int(dimensions.width); self.encodedHeight = Int(dimensions.height)
+                    self.encodedProfile = EncodedProfile.read(format)?.rawValue
+                    if Int(dimensions.width) != outputSize.width || Int(dimensions.height) != outputSize.height || self.encodedProfile != settings.profile.rawValue {
+                        self.encodingFailure = "The encoder did not produce the requested profile or dimensions."
+                    }
+                }
                 self.decoder.append(sample)
             }
         }
@@ -213,6 +217,7 @@ private final class LiveSegment {
         await decodedTask?.value
         pairs.finish()
         let scores = try await worker.value
+        if let encodingFailure { throw QualityError(encodingFailure) }
         guard inputCount == 0 || !scores.isEmpty else {
             throw QualityError("Could not decode the encoded video. Check codec support.")
         }
@@ -221,7 +226,10 @@ private final class LiveSegment {
             evaluationQueueDropped: evaluationDropped, referenceEvictions: evicted,
             unresolvedReferences: references.count, unmatchedDecoded: unmatched, encodedBytes: bytes, encodedCodec: encodedCodec,
             firstPTS: firstPTS, lastPTS: lastPTS,
-            meanVMAF: scores.isEmpty ? nil : scores.reduce(0, +) / Double(scores.count))
+            meanVMAF: scores.isEmpty ? nil : scores.reduce(0, +) / Double(scores.count),
+            encodedWidth: encodedWidth, encodedHeight: encodedHeight, encodedProfile: encodedProfile,
+            referenceWidth: referenceWidth, referenceHeight: referenceHeight,
+            evaluationScaling: "VideoToolbox normal scaling to source dimensions; 8-bit SDR VMAF")
     }
 
     func abort() async {

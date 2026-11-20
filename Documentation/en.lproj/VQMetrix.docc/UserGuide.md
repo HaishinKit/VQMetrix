@@ -107,8 +107,16 @@ receiver is intended for trusted LAN development. It does not provide WAN HTTPS 
 
 ## Learn about scores
 
-See the [English score guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrixcore/understandingvmaf/) or [日本語ガイド](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrixcore/understandingvmaf-japanese/). The Mac sidebar and Help menu open these guides on GitHub Pages. Score bands are practical starting points rather than universal perceptual thresholds.
+See the [English score guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/understandingvmaf/) or [日本語ガイド](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/understandingvmaf/). The Mac sidebar and Help menu open these guides on GitHub Pages. Score bands are practical starting points rather than universal perceptual thresholds.
 
 ## Sender performance
 
-Android Example also records replay processing time, per-frame input/output latency, app CPU time, sampled memory and OS thermal state. Open Sender performance in History and expand Performance timeline. These are sender-reported measurements of offline replay, not a live-stream stability guarantee. CPU/memory cover the whole app. See the [performance guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrixcore/performancemetrics/) for units, sampling and iOS schema compatibility.
+Android Example also records replay processing time, per-frame input/output latency, app CPU time, sampled memory and OS thermal state. Open Sender performance in History and expand Performance timeline. These are sender-reported measurements of offline replay, not a live-stream stability guarantee. CPU/memory cover the whole app. See the [performance guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/performancemetrics/) for units, sampling and iOS schema compatibility.
+
+## Score bands and target
+
+The timeline uses five working bands: 95–100, 90–<95, 80–<90, 70–<80, and below 70.
+These are VQMetrix experiment guidelines, not official pass/fail categories.
+Set any target from 0 to 100 using Target VMAF. The dashed line does not alter measured
+scores; it is retained as a viewing preference and included in exported HTML reports.
+Profile, resolution, or bitrate changes remain separate timeline segments.

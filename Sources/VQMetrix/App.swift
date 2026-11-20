@@ -3,7 +3,6 @@ import AppKit
 import Charts
 import SwiftUI
 import UniformTypeIdentifiers
-import VQMetrixCore
 
 @MainActor
 private final class PreviewSurface: NSView {
@@ -71,40 +70,8 @@ private struct PreviewPanel: View {
                     Label(language.text("Waiting for video"), systemImage: "video").foregroundStyle(.gray)
                 }
             }
-            .frame(height: 220)
+            .frame(height: 200)
             .clipShape(RoundedRectangle(cornerRadius: 10))
-        }
-    }
-}
-
-struct ScoreChart: View, Equatable {
-    let points: [QualityPoint]
-    let language: AppLanguage
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.language == rhs.language && lhs.points.count == rhs.points.count && lhs.points.last?.id == rhs.points.last?.id
-    }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(language.text("VMAF timeline")).font(.headline)
-                Spacer()
-                Text(language.text("Updates about once per second · separate segments per setting")).font(.caption).foregroundStyle(.secondary)
-            }
-            Chart {
-                ForEach(points.suffix(1800)) { point in
-                    LineMark(x: .value(language.text("Time (seconds)"), point.pts), y: .value("VMAF", point.score),
-                        series: .value(language.text("Segment"), point.series))
-                    .foregroundStyle(by: .value(language.text("Settings"), point.series))
-                    .interpolationMethod(.linear)
-                }
-            }
-            .chartYScale(domain: 0...100)
-            .chartXAxisLabel(language.text("Time (seconds)"))
-            .chartLegend(position: .bottom, alignment: .leading)
-            .frame(height: 155)
-            .overlay {
-                if points.isEmpty { Text(language.text("The chart appears when scores are ready.")).foregroundStyle(.secondary) }
-            }
         }
     }
 }
@@ -123,6 +90,7 @@ private struct Metric: View {
 private enum InputKind: String { case file, camera }
 
 struct BenchmarkView: View {
+    @AppStorage("vmafTargetScore") private var targetScore = 90.0
     let language: AppLanguage
     @State private var inputKind = InputKind.file
     @State private var cameras: [CameraInfo] = []
@@ -132,10 +100,12 @@ struct BenchmarkView: View {
     @State private var duration = 30
     @State private var bitrateMbps = 2.0
     @State private var codec = BenchmarkCodec.h264
+    @State private var profile = BenchmarkProfile.main
+    @State private var resolution = BenchmarkResolution.source
 
     private var settings: BenchmarkSettings? {
         guard bitrateMbps.isFinite, bitrateMbps > 0, bitrateMbps <= 100 else { return nil }
-        return BenchmarkSettings(codec: codec, bitrate: Int(bitrateMbps * 1_000_000))
+        return BenchmarkSettings(codec: codec, bitrate: Int(bitrateMbps * 1_000_000), profile: profile, resolution: resolution)
     }
 
     private func chooseVideo() {
@@ -154,7 +124,7 @@ struct BenchmarkView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 Image(nsImage: NSApplication.shared.applicationIconImage).resizable().frame(width: 48, height: 48)
                 VStack(alignment: .leading, spacing: 2) {
@@ -208,6 +178,18 @@ struct BenchmarkView: View {
                         Stepper(language.text("%@ seconds", String(duration)), value: $duration, in: 1...300)
                             .frame(width: 125).disabled(engine.isRunning)
                     }
+                    HStack(spacing: 18) {
+                        Picker(language.text("Profile"), selection: $profile) {
+                            ForEach(codec.profiles, id: \.self) { Text($0.rawValue).tag($0) }
+                        }.frame(width: 200)
+                        Picker(language.text("Output resolution"), selection: $resolution) {
+                            ForEach(BenchmarkResolution.allCases, id: \.self) {
+                                Text(language.text($0.rawValue)).tag($0)
+                            }
+                        }.frame(width: 230)
+                        Text(language.text("Fits the source aspect ratio. VMAF is evaluated at source size."))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.disabled(engine.isApplying)
                 }.padding(8)
             }
             HStack(spacing: 18) {
@@ -220,7 +202,8 @@ struct BenchmarkView: View {
                 Metric(title: language.text("Evaluated / decoded frames"), value: "\(engine.scores.count) / \(engine.decodedFrames)")
                 Metric(title: language.text("Elapsed time"), value: language.text("%@ s", String(format: "%.1f", engine.currentPTS)))
             }.padding(.vertical, 4)
-            ScoreChart(points: engine.scores, language: language).equatable()
+            ScoreTargetControl(language: language)
+            ScoreChart(points: engine.scores, language: language, targetScore: targetScore).equatable()
             Divider()
             HStack(spacing: 12) {
                 if engine.isRunning { ProgressView().controlSize(.small) }
@@ -249,6 +232,7 @@ struct BenchmarkView: View {
         .frame(minWidth: 850, minHeight: 780)
         .onAppear { engine.language = language; refreshCameras() }
         .onChange(of: language) { engine.language = $0 }
+        .onChange(of: codec) { if !$0.profiles.contains(profile) { profile = .main } }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in engine.stop() }
     }
 }

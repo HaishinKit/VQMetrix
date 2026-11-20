@@ -115,11 +115,11 @@ package actor HistoryStore {
         }
     }
 
-    package func report(_ directory: URL, language: AppLanguage) throws -> String {
+    package func report(_ directory: URL, language: AppLanguage, targetScore: Double = 90) throws -> String {
         let detail = try detail(directory)
         return ReportRenderer.html(run: detail.run, annotation: detail.annotation,
             date: detail.run.createdAt ?? (try? directory.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date(),
-            id: directory.lastPathComponent, language: language)
+            id: directory.lastPathComponent, language: language, targetScore: targetScore)
     }
 }
 
@@ -130,7 +130,7 @@ package enum ReportRenderer {
             .replacingOccurrences(of: "'", with: "&#39;")
     }
 
-    static func html(run: SavedRun, annotation: RunAnnotation, date: Date, id: String, language: AppLanguage) -> String {
+    static func html(run: SavedRun, annotation: RunAnnotation, date: Date, id: String, language: AppLanguage, targetScore: Double = 90) -> String {
         func t(_ key: String) -> String { escape(language.text(key)) }
         func number(_ value: Double?) -> String {
             guard let value, value.isFinite else { return "—" }
@@ -142,18 +142,21 @@ package enum ReportRenderer {
         let minimum = scores.map(\.score).min()
         let first = scores.map(\.pts).min() ?? 0
         let last = max(first + 1, scores.map(\.pts).max() ?? 1)
-        let colors = ["#0077cc", "#087f5b", "#9c36b5", "#e67700", "#c2255c"]
-        let paths = run.segments.map { segment in
-            let points = scores.filter { $0.segment == segment.index }.map { point in
-                String(format: "%.2f,%.2f", 45 + (point.pts - first) / (last - first) * 810, 220 - min(100, max(0, point.score)) * 2)
+        let paths = ScoreBandChart.traces(scores).map { trace in
+            let points = trace.vertices.map { vertex in
+                String(format: "%.2f,%.2f", 45 + (vertex.pts - first) / (last - first) * 810, 220 - min(100, max(0, vertex.score)) * 2)
             }.joined(separator: " ")
-            return "<polyline fill=\"none\" stroke=\"\(colors[((segment.index % colors.count) + colors.count) % colors.count])\" stroke-width=\"2\" points=\"\(points)\"/>"
+            return "<polyline fill=\"none\" stroke=\"\(trace.band.lightColor)\" stroke-width=\"2\" points=\"\(points)\"/>"
         }.joined()
+        let target = ScoreBandChart.target(targetScore)
+        let targetY = 220 - target * 2
+        let targetLine = "<line x1=\"45\" x2=\"855\" y1=\"\(targetY)\" y2=\"\(targetY)\" stroke=\"#344054\" stroke-dasharray=\"5 4\"/><text x=\"850\" y=\"\(max(14, targetY - 5))\" text-anchor=\"end\">\(t("Target VMAF")): \(number(target))</text>"
+        let bandLegend = ScoreBand.allCases.reversed().map { "<span style=\"color:\($0.lightColor);margin-right:18px\">\(escape($0.label))</span>" }.joined()
         let grid = [0, 25, 50, 75, 100].map { value in
             "<line x1=\"45\" x2=\"855\" y1=\"\(220 - value * 2)\" y2=\"\(220 - value * 2)\" stroke=\"#e2e8f0\"/><text x=\"34\" y=\"\(224 - value * 2)\" text-anchor=\"end\">\(value)</text>"
         }.joined()
         let rows = run.segments.map { segment in
-            "<tr><td>\(segment.index + 1)</td><td>\(escape(segment.settings.codec.rawValue))</td><td>\(number(Double(segment.settings.bitrate) / 1_000_000)) Mbps</td><td>\(number(segment.meanVMAF))</td><td>\(segment.evaluatedFrames) / \(segment.inputFrames)</td><td>\(max(0, segment.inputFrames - segment.evaluatedFrames))</td></tr>"
+            "<tr><td>\(segment.index + 1)</td><td>\(escape(segment.settings.codec.rawValue + " " + (segment.encodedProfile ?? (run.sourceKind == "upload" ? "" : segment.settings.profile.rawValue))))</td><td>\(number(Double(segment.settings.bitrate) / 1_000_000)) Mbps</td><td>\(segment.encodedWidth.map(String.init) ?? "—") × \(segment.encodedHeight.map(String.init) ?? "—")</td><td>\(number(segment.meanVMAF))</td><td>\(segment.evaluatedFrames) / \(segment.inputFrames)</td><td>\(max(0, segment.inputFrames - segment.evaluatedFrames))</td></tr>"
         }.joined()
         let performance = SenderPerformance.html(run.senderPerformance ?? [], language:language)
         let notes = annotation.notes.isEmpty ? "" : "<h2>\(t("Notes"))</h2><div class=\"notes\">\(escape(annotation.notes))</div>"
@@ -167,8 +170,8 @@ package enum ReportRenderer {
         <p class="meta">\(t("Date")): \(escape(dateText))<br>\(t("Source")): \(escape(run.sourceName ?? run.input))<br>\(escape(run.format ?? ""))<br>\(t("Model")): \(escape(run.model)) · libvmaf \(escape(run.libvmafVersion))</p>
         <p class="\(run.completeEvaluation ? "meta" : "warning")">\(t(run.completeEvaluation ? "Complete evaluation" : "Partial evaluation"))\(run.stoppedByUser ? " · " + t("Stopped by user") : "")</p>\(failure)
         <div class="metrics"><div class="metric">\(t("Mean VMAF"))<strong>\(number(mean))</strong></div><div class="metric">\(t("Minimum VMAF"))<strong>\(number(minimum))</strong></div><div class="metric">\(t("Evaluated frames"))<strong>\(run.evaluatedFrames) / \(run.inputFrames)</strong></div><div class="metric">\(t("Skipped frames"))<strong>\(max(0, run.inputFrames - run.evaluatedFrames))</strong></div></div>
-        <h2>\(t("VMAF timeline"))</h2><svg viewBox="0 0 900 260" role="img" aria-label="\(t("VMAF timeline"))">\(grid)\(paths)<text x="45" y="244">\(number(first))</text><text x="855" y="244" text-anchor="end">\(number(last))</text></svg><p class="meta">\(t("Time (seconds)"))</p>
-        <h2>\(t("Encoding settings by segment"))</h2><table><thead><tr><th>\(t("Segment"))</th><th>\(t("Codec"))</th><th>\(t("Target bitrate"))</th><th>\(t("Mean VMAF"))</th><th>\(t("Evaluated frames"))</th><th>\(t("Skipped frames"))</th></tr></thead><tbody>\(rows)</tbody></table>
+        <h2>\(t("VMAF timeline"))</h2><svg viewBox="0 0 900 260" role="img" aria-label="\(t("VMAF timeline"))">\(grid)\(paths)\(targetLine)<text x="45" y="244">\(number(first))</text><text x="855" y="244" text-anchor="end">\(number(last))</text></svg><p class="meta">\(t("Time (seconds)"))</p><p>\(bandLegend)</p><p class="meta">\(t("Score bands are working guidelines."))</p>
+        <h2>\(t("Encoding settings by segment"))</h2><table><thead><tr><th>\(t("Segment"))</th><th>\(t("Codec"))</th><th>\(t("Target bitrate"))</th><th>\(t("Output resolution"))</th><th>\(t("Mean VMAF"))</th><th>\(t("Evaluated frames"))</th><th>\(t("Skipped frames"))</th></tr></thead><tbody>\(rows)</tbody></table>
         \(performance)\(notes)<p class="warning">\(t("Scores describe evaluated frames only. Missing frames and temporal gaps affect interpretation."))</p><p class="meta">\(t("Encoding and decoding run on this device. Network delivery is excluded. Skipped evaluation frames are recorded."))</p><p class="meta">\(t("Run ID")): \(escape(id))</p></main></html>
         """
     }

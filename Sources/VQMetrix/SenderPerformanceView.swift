@@ -1,6 +1,5 @@
 import Charts
 import SwiftUI
-import VQMetrixCore
 
 struct SenderPerformanceView: View {
     let items: [SenderPerformance]
@@ -27,7 +26,7 @@ struct SenderPerformanceView: View {
         return GroupBox {
             VStack(alignment:.leading,spacing:12) {
                 HStack {
-                    Text(item.settings.label).font(.subheadline.bold())
+                    Text(item.settings.bitrateLabel).font(.subheadline.bold())
                     Spacer()
                     Text(language.text(m.mode == "offlineReplay" ? "Offline replay" : "Live encoding")).font(.caption).foregroundStyle(.secondary)
                 }

@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import VQMetrixCore
 
 @MainActor
 final class ReceiverModel: ObservableObject {
@@ -46,7 +45,7 @@ server.start(progress: { [weak self] received,total in
     func refresh() async { jobs = await store.list() }
     func openUploads() {
         Task {
-            let root = await store.root
+            let root = store.root
             try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
             NSWorkspace.shared.open(root)
         }

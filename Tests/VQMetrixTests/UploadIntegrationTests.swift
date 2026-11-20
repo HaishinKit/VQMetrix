@@ -2,7 +2,7 @@
 import Foundation
 import Testing
 import ZIPFoundation
-@testable import VQMetrixCore
+@testable import VQMetrix
 
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["CI"] != "true"))
 struct UploadIntegrationTests {

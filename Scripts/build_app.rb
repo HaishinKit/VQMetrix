@@ -27,7 +27,7 @@ abort 'Invalid app version' unless version.match?(/\A[0-9]+\.[0-9]+\.[0-9]+(?:-[
 short_version = version.split('-').first
 puts capture('swift', 'build', '-c', 'release')
 bin = capture('swift', 'build', '-c', 'release', '--show-bin-path').lines.last.strip
-gui = File.join(bin, 'VQMetrixApp')
+gui = File.join(bin, 'VQMetrix')
 vmaf = dependencies(gui).find { |path| File.basename(path).match?(/\Alibvmaf\..*dylib\z/) }
 abort 'Missing libvmaf' unless vmaf && File.file?(vmaf)
 sparkle = Dir[File.join(ROOT, '.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-*/Sparkle.framework')].first
@@ -54,7 +54,7 @@ load_commands = capture('otool', '-l', gui)
 unless load_commands.include?('@executable_path/../Frameworks')
   capture('install_name_tool', '-add_rpath', '@executable_path/../Frameworks', File.join(contents, 'MacOS/VQMetrix'))
 end
-resource_bundle = File.join(bin, 'VQMetrix_VQMetrixCore.bundle')
+resource_bundle = File.join(bin, 'VQMetrix_VQMetrix.bundle')
 abort 'Missing localization resources' unless File.directory?(resource_bundle)
 FileUtils.cp_r(resource_bundle, resources)
 Dir[File.join(bin, 'ZIPFoundation*.bundle/PrivacyInfo.xcprivacy')].each { |notice| FileUtils.cp(notice, resources) }
