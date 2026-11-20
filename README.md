@@ -1,4 +1,4 @@
-# 📊 VQMetrix
+# 📊 [VQMetrix](https://haishinkit.github.io/VQMetrix/)
 
 [![Build](https://github.com/HaishinKit/VQMetrix/actions/workflows/build.yml/badge.svg)](https://github.com/HaishinKit/VQMetrix/actions/workflows/build.yml)
 [![Android](https://img.shields.io/badge/Android-API%2026%2B-3ddc84)](Android/README.md)
@@ -71,7 +71,7 @@ for the external artifact and Example integration.
 [Published documentation](https://haishinkit.github.io/VQMetrix/) · [VMAF score guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrixcore/understandingvmaf/) · [User guide](docs/user-guide.md) · [Transfer protocol](docs/transfer.md) · [Release workflow](docs/releases.md)
 
 Tags generate Swift DocC, Android Dokka, and a combined API-reference archive. Extract
-it and run `ruby serve.rb` to read it locally. GitHub Pages publication is optional.
+it and run `ruby serve.rb` to read it locally. GitHub Pages hosts the product page and generated reference.
 
 ## 🧪 Verification
 

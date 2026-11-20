@@ -1,0 +1,49 @@
+name: Update landing page
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/site/**'
+      - 'Scripts/build_landing_page.rb'
+      - 'Scripts/build_documentation_site.rb'
+      - '.github/workflows/pages.yml'
+permissions:
+  contents: read
+concurrency:
+  group: landing-page
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare released documentation and landing page
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release download --pattern api-documentation.tar.gz --dir "$RUNNER_TEMP/reference"
+          mkdir -p "$RUNNER_TEMP/site"
+          tar -xzf "$RUNNER_TEMP/reference/api-documentation.tar.gz" -C "$RUNNER_TEMP/site"
+          /usr/bin/ruby Scripts/build_documentation_site.rb "$RUNNER_TEMP/site" "$(cat VERSION)"
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
