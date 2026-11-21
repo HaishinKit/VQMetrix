@@ -168,6 +168,8 @@ struct HistoryView: View {
                     Text(language.text("Output %@ × %@ · VMAF at %@ × %@", String(width), String(height), String(segment.evaluationWidth ?? referenceWidth), String(segment.evaluationHeight ?? referenceHeight)))
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                if let statistics = segment.realtimeStatistics { RealtimeStatisticsView(statistics: statistics, language: language) }
+                if let statistics = segment.encoderStatistics { EncoderStatisticsView(statistics: statistics, language: language) }
             }
 if let performance = run.senderPerformance, !performance.isEmpty {
     SenderPerformanceView(items:performance,language:language)

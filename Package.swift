@@ -15,7 +15,7 @@ let package = Package(
     ],
     targets: [
         .systemLibrary(name: "CVMAF", pkgConfig: "libvmaf", providers: [.brew(["libvmaf"]) ]),
-        .executableTarget(name: "VQMetrix", dependencies: [.product(name: "HaishinKit", package: "HaishinKit.swift"), "CVMAF", "ZIPFoundation", .product(name: "Sparkle", package: "Sparkle")], resources: [.process("Resources")]),
+        .executableTarget(name: "VQMetrix", dependencies: [.product(name: "HaishinKit", package: "HaishinKit.swift"), .product(name: "VPXHaishinKit", package: "HaishinKit.swift"), .product(name: "AOMHaishinKit", package: "HaishinKit.swift"), "CVMAF", "ZIPFoundation", .product(name: "Sparkle", package: "Sparkle")], resources: [.process("Resources")]),
         .testTarget(name: "VQMetrixTests", dependencies: ["VQMetrix"])
     ],
     swiftLanguageModes: [.v6]

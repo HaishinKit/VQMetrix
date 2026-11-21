@@ -4,12 +4,12 @@ import Testing
 @testable import VQMetrix
 
 struct HistoryAndLocalizationTests {
-    private func run() -> SavedRun {
+    private func run(statistics: EncoderStatistics? = nil) -> SavedRun {
         let settings = BenchmarkSettings(codec: .h264, bitrate: 1_000_000)
         let segment = SegmentReport(index: 0, settings: settings, inputFrames: 2, encodedFrames: 2,
             decodedFrames: 2, evaluatedFrames: 1, evaluationQueueDropped: 1, referenceEvictions: 0,
             unresolvedReferences: 0, unmatchedDecoded: 0, encodedBytes: 1000,
-            encodedCodec: kCMVideoCodecType_H264, firstPTS: 0, lastPTS: 0.1, meanVMAF: 90)
+            encodedCodec: kCMVideoCodecType_H264, firstPTS: 0, lastPTS: 0.1, meanVMAF: 90, encoderStatistics: statistics)
         return SavedRun(input: "/video/<source>.mp4", model: "vmaf_v0.6.1", libvmafVersion: "3.2.0",
             inputFrames: 2, evaluatedFrames: 1, completeEvaluation: false, stoppedByUser: true,
             mixerQueueDropped: 0, mixerUndelivered: 0, segments: [segment],
@@ -61,6 +61,28 @@ struct HistoryAndLocalizationTests {
         }
     }
 
+    @Test func encoderStatisticsSurviveHistoryReloadAndReports() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let directory = root.appendingPathComponent("statistics")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        var statistics = EncoderStatistics.empty(backend: "libaom", measurement: "Native encode call")
+        statistics.submittedFrameCount = 2
+        statistics.recordOutput(bytes: 4321, duration: 0.001)
+        statistics.recordOutput(bytes: 1234, duration: 0.003)
+        let measurement = run(statistics: statistics)
+        try JSONEncoder().encode(measurement).write(to: directory.appendingPathComponent("live-summary.json"))
+        try JSONEncoder().encode(RunMetadata(run: measurement)).write(to: directory.appendingPathComponent("history.json"))
+        let store = HistoryStore(root: root)
+        #expect(try await store.list().entries.count == 1)
+        #expect(try await store.detail(directory).run.segments.first?.encoderStatistics == statistics)
+        let html = try await store.report(directory, language: .english)
+        #expect(html.contains("Encoder statistics") && html.contains("libaom") && html.contains("5555"))
+        #expect(html.contains("Native encode call") && html.contains("2.00"))
+        #expect(try await store.report(directory, language: .japanese).contains("エンコーダー統計"))
+        #expect(try JSONDecoder().decode(SavedRun.self, from: JSONEncoder().encode(run())).segments.first?.encoderStatistics == nil)
+    }
+
     @Test func translationsHaveMatchingKeysAndPlaceholders() throws {
         let source = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Sources/VQMetrix/Resources")
@@ -70,6 +92,7 @@ struct HistoryAndLocalizationTests {
         for (key, value) in english ?? [:] {
             #expect(value.components(separatedBy: "%@").count == japanese?[key]?.components(separatedBy: "%@").count)
         }
+        #expect(AppLanguage.japanese.text("Measurement") == "計測")
         #expect(AppLanguage.english.text("Camera") == "Camera")
         #expect(AppLanguage.japanese.text("Camera") == "カメラ")
         #expect(AppLanguage.japanese.text("%@ seconds", "30") == "30 秒")

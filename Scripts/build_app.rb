@@ -76,6 +76,12 @@ capture('install_name_tool', '-change', vmaf, "@executable_path/../Frameworks/#{
   'Sparkle.txt' => File.join(ROOT, '.build/checkouts/Sparkle/LICENSE'),
   'ZIPFoundation.txt' => File.join(ROOT, '.build/checkouts/ZIPFoundation/LICENSE')
 }.each { |name, source| FileUtils.cp(source, File.join(resources, 'Licenses', name)) }
+# Static codec binaries do not copy their notices into the application automatically.
+%w[libvpx libaom].each do |codec|
+  artifact = File.join(ROOT, ".build/artifacts/#{codec}-xcframework/#{codec}/#{codec}.xcframework/Licenses")
+  abort "Missing #{codec} license notices" unless File.directory?(artifact)
+  FileUtils.cp_r(artifact, File.join(resources, 'Licenses', codec))
+end
 iconset = File.join(ROOT, '.build/AppIcon.iconset')
 FileUtils.mkdir_p(iconset)
 [16, 32, 128, 256, 512].each do |size|

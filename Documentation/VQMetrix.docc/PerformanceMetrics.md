@@ -71,3 +71,28 @@ The HTML report exports a per-variant summary and latency graphs alongside VMAF.
 ## Language / 言語
 
 [English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/performancemetrics/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/performancemetrics/)
+
+## Local encoder statistics
+
+The live screen, each History segment, saved JSON, and HTML reports include encoder
+statistics. Older histories without statistics remain readable. Each segment starts
+new counters, including when changing bitrate, profile, codec, or resolution. Search
+trial measurements also retain these values in their individual run histories.
+
+- VP8/VP9/AV1: native encode-call wall time (last, mean, maximum, and cumulative seconds),
+  accepted frames, returned packets, and compressed payload bytes. Conversion, copying,
+  validation, failed calls, and flushing time are excluded; drained output is counted.
+- H.264/HEVC: submission-to-encoded-output wall time, including asynchronous queueing
+  and scheduling. This is not the same measurement as a native software encode call.
+
+Timing uses a monotonic clock. `timedFrameCount` is the mean's denominator. Cumulative
+per-frame times may overlap for asynchronous encoders and are not total run wall time.
+Neither scope is CPU utilization, power consumption, or end-to-end playback latency.
+
+## Live FPS and pipeline delay
+
+Frame delivery shows nominal FPS, actual mixer input FPS, decoded output FPS over the last second, mean segment output FPS, and mean/maximum mixer-arrival-to-decoded latency. Latency includes queueing after mixer output, conversion, encoding, decoding, and main-actor delivery. Capture before mixer output and network delivery are excluded. Live output FPS drops to zero after a second without decoded frames; completed runs keep their end-of-segment snapshot.
+
+History, JSON, and HTML retain frames over one nominal frame interval, pending frames (including the mixer queue), observed peak pending frames, and actual mixer drops. Peak pending is observed at frame events and periodic samples; it is not a guarantee of the instantaneous peak. Startup FPS uses the observed portion of the first second.
+
+Latency above one interval is not by itself a dropped frame or a realtime failure: pipelined codecs can sustain the nominal FPS with greater per-frame latency. Compare FPS, pending queue growth, actual drops and evaluated frames together. Offline search is labeled offline throughput and does not establish live performance.
