@@ -41,9 +41,14 @@ package struct SegmentReport: Codable, Sendable {
     package var evaluationHeight: Int? = nil
     package var evaluationBitDepth: Int? = nil
     package var encoderStatistics: EncoderStatistics? = nil
+    package var realtimeStatistics: RealtimeStatistics? = nil
 }
 
-private struct VideoFrame: @unchecked Sendable { let sample: CMSampleBuffer }
+private struct VideoFrame: @unchecked Sendable {
+    let sample: CMSampleBuffer
+    let arrived: Double
+    init(sample: CMSampleBuffer, arrived: Double = ProcessInfo.processInfo.systemUptime) { self.sample = sample; self.arrived = arrived }
+}
 private struct EvaluationPair: @unchecked Sendable {
     let reference: CVPixelBuffer
     let decoded: CVPixelBuffer
@@ -60,12 +65,16 @@ private final class LiveMixerTap: MediaMixerOutput, @unchecked Sendable {
     private var accepting = true
     private var received = 0
     private var dropped = 0
+    private var consumed = 0
+    private var recentArrivals: [Double] = []
 
     init() { (stream, continuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingOldest(8)) }
     func mixer(_ mixer: MediaMixer, didOutput sampleBuffer: CMSampleBuffer) {
         lock.lock()
         guard accepting else { lock.unlock(); return }
         received += 1
+        let now = ProcessInfo.processInfo.systemUptime
+        recentArrivals.removeAll { $0 < now - 1 }; recentArrivals.append(now)
         if case .dropped = continuation.yield(VideoFrame(sample: sampleBuffer)) { dropped += 1 }
         lock.unlock()
     }
@@ -77,10 +86,12 @@ private final class LiveMixerTap: MediaMixerOutput, @unchecked Sendable {
         continuation.finish()
         lock.unlock()
     }
-    func counts() -> (received: Int, dropped: Int) {
+    func consumedFrame() { lock.lock(); consumed += 1; lock.unlock() }
+    func counts() -> (received: Int, dropped: Int, queued: Int, recentInputs: Int) {
         lock.lock()
         defer { lock.unlock() }
-        return (received, dropped)
+        recentArrivals.removeAll { $0 < ProcessInfo.processInfo.systemUptime - 1 }
+        return (received, dropped, max(0, received - dropped - consumed), recentArrivals.count)
     }
 }
 
@@ -96,6 +107,10 @@ private final class CaptureProgress { var lastFrameAt = ProcessInfo.processInfo.
 private final class LiveSegment {
     let settings: BenchmarkSettings
     let index: Int
+    private let realtime: RealtimeTracker
+    private var finalRealtime: RealtimeStatistics?
+    private let queueCounts: @MainActor () -> (queued: Int, dropped: Int, recentInputs: Int)
+    private let initialDropped: Int
     private let replayProgress = ReplayProgress()
     private let software: SoftwareCodecWorker?
     private var statistics = EncoderStatistics.empty(backend: "VideoToolbox", measurement: "Submission to output")
@@ -128,7 +143,9 @@ private final class LiveSegment {
 
     init(settings: BenchmarkSettings, index: Int, width: Int, height: Int, fps: Float,
          directory: URL, offline: Bool = false, onDecoded: @escaping @MainActor (CMSampleBuffer) -> Void,
-         onStatistics: @escaping @MainActor (EncoderStatistics) -> Void, onScores: @escaping @Sendable ([QualityPoint]) async -> Void) throws {
+         queueCounts: @escaping @MainActor () -> (queued: Int, dropped: Int, recentInputs: Int), onStatistics: @escaping @MainActor (EncoderStatistics) -> Void, onScores: @escaping @Sendable ([QualityPoint]) async -> Void) throws {
+        realtime = RealtimeTracker(fps: Double(fps), offline: offline)
+        self.queueCounts = queueCounts; initialDropped = index == 0 ? 0 : queueCounts().dropped
         let target = settings.resolution.dimensions(width: width, height: height)
         software = settings.codec.isSoftware ? try SoftwareCodecWorker(settings: settings, width: target.width, height: target.height, fps: fps) : nil
         self.onStatistics = onStatistics
@@ -220,6 +237,7 @@ private final class LiveSegment {
         }
         references[key(frame.sample)] = frame
         inputCount += 1
+        realtime.input(arrived: frame.arrived)
         let pts = frame.sample.presentationTimeStamp.seconds - 1
         if firstPTS == nil { firstPTS = pts }
         lastPTS = pts
@@ -247,7 +265,9 @@ private final class LiveSegment {
     private func receive(_ sample: CMSampleBuffer) {
         decodedCount += 1
         onDecoded(sample)
-        guard let ref = references.removeValue(forKey: key(sample))?.sample.imageBuffer,
+        let reference = references.removeValue(forKey: key(sample))
+        realtime.output(at: ProcessInfo.processInfo.systemUptime, arrived: reference?.arrived)
+        guard let ref = reference?.sample.imageBuffer,
               let decoded = sample.imageBuffer else {
             unmatched += 1
             return
@@ -263,10 +283,16 @@ private final class LiveSegment {
         bytes = Int(statistics.encodedByteCount)
         let size = settings.resolution.dimensions(width: referenceWidth, height: referenceHeight)
         encodedWidth = size.width; encodedHeight = size.height
-        encodedCodec = settings.codec == .vp9 ? kCMVideoCodecType_VP9 : kCMVideoCodecType_AV1
+        encodedCodec = settings.codec.codecType
         encodedProfile = settings.profile.rawValue
         onStatistics(statistics)
         for sample in output.frames.samples { receive(sample) }
+    }
+
+    func realtimeSnapshot() -> RealtimeStatistics {
+        if let finalRealtime { return finalRealtime }
+        let counts = queueCounts()
+        return realtime.snapshot(at: ProcessInfo.processInfo.systemUptime, queued: counts.queued, dropped: max(0, counts.dropped - initialDropped), recentInputs: counts.recentInputs)
     }
 
     func finish() async throws -> SegmentReport {
@@ -279,6 +305,7 @@ private final class LiveSegment {
             try decoder.finish()
             await decodedTask?.value
         }
+        finalRealtime = realtimeSnapshot()
         pairs.finish()
         let scores = try await worker.value
         if let encodingFailure { throw QualityError(encodingFailure) }
@@ -296,7 +323,7 @@ private final class LiveSegment {
             evaluationScaling: "VideoToolbox normal scaling; \(settings.evaluationModel.bitDepth)-bit SDR VMAF; \(settings.evaluationModel == .v1 ? "short side 1080" : "source dimensions")",
             evaluationWidth: settings.evaluationModel.dimensions(width: referenceWidth, height: referenceHeight).width,
             evaluationHeight: settings.evaluationModel.dimensions(width: referenceWidth, height: referenceHeight).height,
-            evaluationBitDepth: settings.evaluationModel.bitDepth, encoderStatistics: statistics)
+            evaluationBitDepth: settings.evaluationModel.bitDepth, encoderStatistics: statistics, realtimeStatistics: finalRealtime)
     }
 
     func abort() async {
@@ -318,6 +345,9 @@ package final class LiveBenchmark: ObservableObject {
     @Published package private(set) var sourceSample: CMSampleBuffer?
     @Published package private(set) var decodedSample: CMSampleBuffer?
     @Published package private(set) var scores: [QualityPoint] = []
+    @Published package private(set) var realtimeStatistics: RealtimeStatistics?
+    private var activeTap: LiveMixerTap?
+    private var healthMonitor: Task<Void, Never>?
     @Published package private(set) var encoderStatistics: EncoderStatistics?
     @Published package private(set) var reports: [SegmentReport] = []
     @Published package private(set) var activeSettings: BenchmarkSettings?
@@ -356,7 +386,7 @@ package final class LiveBenchmark: ObservableObject {
 
     package func start(input: URL, settings: BenchmarkSettings, duration: Double, offline: Bool = false, outputDirectory: URL? = nil) {
         guard !isRunning, settings.isValid, duration.isFinite, duration > 0, duration <= 300 else { return }
-        scores = []; reports = []; encoderStatistics = nil; decodedFrames = 0; inputFrames = 0; currentPTS = 0
+        scores = []; reports = []; encoderStatistics = nil; realtimeStatistics = nil; decodedFrames = 0; inputFrames = 0; currentPTS = 0
         sourceSample = nil; decodedSample = nil; errorMessage = nil; resultDirectory = nil
         startedAtDate = Date(); activeSettings = settings; activeSegment = 0; pending = nil; stopRequested = false
         isApplying = false; isRunning = true; setStatus("Preparing video…")
@@ -378,11 +408,22 @@ package final class LiveBenchmark: ObservableObject {
     }
 
     private func newSegment(settings: BenchmarkSettings, width: Int, height: Int, fps: Float, directory: URL, offline: Bool = false) throws -> LiveSegment {
-        encoderStatistics = nil
+        encoderStatistics = nil; realtimeStatistics = nil
+        healthMonitor?.cancel()
+        healthMonitor = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.isRunning else { return }
+                self.realtimeStatistics = self.segment?.realtimeSnapshot()
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            }
+        }
         return try LiveSegment(settings: settings, index: activeSegment, width: width, height: height, fps: fps,
             directory: directory, offline: offline, onDecoded: { [weak self] sample in
                 self?.decodedSample = sample
                 self?.decodedFrames += 1
+            }, queueCounts: { [weak self] in
+                let counts = self?.activeTap?.counts()
+                return (counts?.queued ?? 0, counts?.dropped ?? 0, counts?.recentInputs ?? 0)
             }, onStatistics: { [weak self] snapshot in self?.encoderStatistics = snapshot }, onScores: { [weak self] batch in
                 await MainActor.run { self?.scores.append(contentsOf: batch) }
             })
@@ -391,6 +432,7 @@ package final class LiveBenchmark: ObservableObject {
     private func run(input: URL, initialSettings: BenchmarkSettings, duration: Double, offline: Bool, outputDirectory: URL?) async {
         let mixer = MediaMixer(captureSessionMode: .manual)
         let tap = LiveMixerTap()
+        activeTap = tap
         var tapTask: Task<Void, Never>?
         var processed = 0
         var forwardFailure: String?
@@ -439,6 +481,7 @@ package final class LiveBenchmark: ObservableObject {
             startedMixer = true
             tapTask = Task { @MainActor [weak self] in
                 for await frame in tap.stream {
+                    tap.consumedFrame()
                     self?.sourceSample = frame.sample
                     if offline {
                         do { try await self?.segment?.appendForReplay(frame) }
@@ -599,7 +642,7 @@ extension LiveBenchmark {
 
     package func start(cameraID: String, name: String, settings: BenchmarkSettings, duration: Double) {
         guard !isRunning, settings.isValid, duration.isFinite, duration > 0, duration <= 300 else { return }
-        scores = []; reports = []; encoderStatistics = nil; decodedFrames = 0; inputFrames = 0; currentPTS = 0
+        scores = []; reports = []; encoderStatistics = nil; realtimeStatistics = nil; decodedFrames = 0; inputFrames = 0; currentPTS = 0
         sourceSample = nil; decodedSample = nil; errorMessage = nil; resultDirectory = nil
         startedAtDate = Date(); activeSettings = settings; activeSegment = 0; pending = nil; stopRequested = false
         isApplying = false; isRunning = true; setStatus("Requesting camera access…")
@@ -610,6 +653,7 @@ extension LiveBenchmark {
                          mixerDropped: Int, undelivered: Int, failure: String? = nil) throws {
         guard let resultDirectory else { return }
         let complete = failure == nil && scores.count == inputFrames
+        realtimeStatistics = reports.last?.realtimeStatistics
         var summary = SavedRun(input: input, model: (activeSettings?.evaluationModel ?? .v1).rawValue,
             libvmafVersion: String(cString: vmaf_version()), inputFrames: inputFrames,
             evaluatedFrames: scores.count, completeEvaluation: complete, stoppedByUser: stopRequested,
@@ -634,6 +678,7 @@ extension LiveBenchmark {
     private func runCamera(id: String, name: String, settings: BenchmarkSettings, duration: Double) async {
         let mixer = MediaMixer(captureSessionMode: .single)
         let tap = LiveMixerTap()
+        activeTap = tap
         var watchdog: Task<Void, Never>?
         var streamFailure: String?
         var lastReceivedAt = ProcessInfo.processInfo.systemUptime
@@ -688,6 +733,7 @@ extension LiveBenchmark {
             var dimensions: (width: Int, height: Int)?
             var fps: Float = 30
             for await frame in tap.stream {
+                    tap.consumedFrame()
                 if stopRequested { break }
                 let normalized = try timeline.normalize(frame.sample)
                 if normalized.elapsed >= duration { break }
@@ -722,7 +768,7 @@ extension LiveBenchmark {
                 sourceSample = normalized.sample
                 currentPTS = normalized.elapsed
                 inputFrames = tap.counts().received
-                try await segment?.append(VideoFrame(sample: normalized.sample))
+                try await segment?.append(VideoFrame(sample: normalized.sample, arrived: frame.arrived))
             }
             watchdog?.cancel()
             tap.finish()
@@ -802,6 +848,7 @@ extension LiveBenchmark {
                 }
             }
             for await frame in tap.stream {
+                    tap.consumedFrame()
                 if cancelled() { throw CancellationError() }
                 progress.lastFrameAt = ProcessInfo.processInfo.systemUptime
                 let normalized = try timeline.normalize(frame.sample)

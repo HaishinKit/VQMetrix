@@ -237,3 +237,19 @@
 "Submission-to-output time includes asynchronous encoder queues; it is not native encode time or CPU utilization." = "Submission-to-output time includes asynchronous encoder queues; it is not native encode time or CPU utilization.";
 "Encoder timing scopes differ by backend; these values are not CPU utilization." = "Encoder timing scopes differ by backend; these values are not CPU utilization.";
 "Software VP9/AV1 encoding runs on a worker. Slow encoding may skip frames in live mode; use offline search for repeatable comparisons." = "Software VP9/AV1 encoding runs on a worker. Slow encoding may skip frames in live mode; use offline search for repeatable comparisons.";
+
+// Frame delivery
+"Frame delivery" = "Frame delivery";
+"Live measurement" = "Live measurement";
+"Offline throughput" = "Offline throughput";
+"Expected / output FPS" = "Expected / output FPS";
+"Mean output FPS" = "Mean output FPS";
+"Mean decode latency" = "Mean decode latency";
+"Maximum decode latency" = "Maximum decode latency";
+"Mean / maximum decode latency" = "Mean / maximum decode latency";
+"Frames over one interval" = "Frames over one interval";
+"Pending / peak frames" = "Pending / peak frames";
+"Mixer dropped frames" = "Mixer dropped frames";
+"Output FPS uses the last second. Latency includes conversion, queues, encoding and decoding. Exceeding one frame interval does not itself mean a dropped frame." = "Output FPS uses the last second. Latency includes conversion, queues, encoding and decoding. Exceeding one frame interval does not itself mean a dropped frame.";
+"Mixer input FPS" = "Mixer input FPS";
+"Expected / input / output FPS" = "Expected / input / output FPS";

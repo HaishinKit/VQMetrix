@@ -166,6 +166,14 @@ package enum ReportRenderer {
         let encoderSection = encoderRows.isEmpty ? "" : """
         <h2>\(t("Encoder statistics"))</h2><div style="overflow-x:auto"><table><thead><tr><th>\(t("Segment"))</th><th>\(t("Encoder"))</th><th>\(t("Timing scope"))</th><th>\(t("Last encode")) (ms)</th><th>\(t("Mean encode")) (ms)</th><th>\(t("Maximum encode")) (ms)</th><th>\(t("Total encode")) (s)</th><th>\(t("Submitted / packets"))</th><th>\(t("Encoded payload")) (bytes)</th></tr></thead><tbody>\(encoderRows)</tbody></table></div><p class="meta">\(t("Encoder timing scopes differ by backend; these values are not CPU utilization."))</p>
         """
+        let deliveryRows = run.segments.compactMap { segment -> String? in
+            guard let value = segment.realtimeStatistics else { return nil }
+            let mode = value.mode == "live" ? "Live measurement" : "Offline throughput"
+            return "<tr><td>\(segment.index + 1)</td><td>\(t(mode))</td><td>\(number(value.expectedFPS)) / \(number(value.inputFPS)) / \(number(value.outputFPS))</td><td>\(number(value.averageOutputFPS))</td><td>\(number(value.meanLatencyMilliseconds)) / \(number(value.maximumLatencyMilliseconds))</td><td>\(value.framesOverInterval) / \(value.timedFrames)</td><td>\(value.pendingFrames) / \(value.maximumPendingFrames)</td><td>\(value.mixerDroppedFrames)</td></tr>"
+        }.joined()
+        let deliverySection = deliveryRows.isEmpty ? "" : """
+        <h2>\(t("Frame delivery"))</h2><div style="overflow-x:auto"><table><thead><tr><th>\(t("Segment"))</th><th>\(t("Timing scope"))</th><th>\(t("Expected / input / output FPS"))</th><th>\(t("Mean output FPS"))</th><th>\(t("Mean / maximum decode latency")) (ms)</th><th>\(t("Frames over one interval"))</th><th>\(t("Pending / peak frames"))</th><th>\(t("Mixer dropped frames"))</th></tr></thead><tbody>\(deliveryRows)</tbody></table></div><p class="meta">\(t("Output FPS uses the last second. Latency includes conversion, queues, encoding and decoding. Exceeding one frame interval does not itself mean a dropped frame."))</p>
+        """
         let search = run.bitrateSearch.map { $0.html(language: language) } ?? ""
         let performance = SenderPerformance.html(run.senderPerformance ?? [], language:language)
         let notes = annotation.notes.isEmpty ? "" : "<h2>\(t("Notes"))</h2><div class=\"notes\">\(escape(annotation.notes))</div>"
@@ -181,7 +189,7 @@ package enum ReportRenderer {
         <div class="metrics"><div class="metric">\(t("Mean VMAF"))<strong>\(number(mean))</strong></div><div class="metric">\(t("Minimum VMAF"))<strong>\(number(minimum))</strong></div><div class="metric">\(t("Evaluated frames"))<strong>\(run.evaluatedFrames) / \(run.inputFrames)</strong></div><div class="metric">\(t("Skipped frames"))<strong>\(max(0, run.inputFrames - run.evaluatedFrames))</strong></div></div>
         \(search)<h2>\(t("VMAF timeline"))</h2><svg viewBox="0 0 900 260" role="img" aria-label="\(t("VMAF timeline"))">\(grid)\(paths)\(targetLine)<text x="45" y="244">\(number(first))</text><text x="855" y="244" text-anchor="end">\(number(last))</text></svg><p class="meta">\(t("Time (seconds)"))</p><p>\(bandLegend)</p><p class="meta">\(t("Score bands are working guidelines."))</p>
         <h2>\(t("Encoding settings by segment"))</h2><table><thead><tr><th>\(t("Segment"))</th><th>\(t("Codec"))</th><th>\(t("Target bitrate"))</th><th>\(t("Output resolution"))</th><th>\(t("VMAF evaluation"))</th><th>\(t("Mean VMAF"))</th><th>\(t("Evaluated frames"))</th><th>\(t("Skipped frames"))</th></tr></thead><tbody>\(rows)</tbody></table>
-        \(encoderSection)\(performance)\(notes)<p class="warning">\(t("Scores describe evaluated frames only. Missing frames and temporal gaps affect interpretation."))</p><p class="meta">\(t("Encoding and decoding run on this device. Network delivery is excluded. Skipped evaluation frames are recorded."))</p><p class="meta">\(t("Run ID")): \(escape(id))</p></main></html>
+        \(deliverySection)\(encoderSection)\(performance)\(notes)<p class="warning">\(t("Scores describe evaluated frames only. Missing frames and temporal gaps affect interpretation."))</p><p class="meta">\(t("Encoding and decoding run on this device. Network delivery is excluded. Skipped evaluation frames are recorded."))</p><p class="meta">\(t("Run ID")): \(escape(id))</p></main></html>
         """
     }
 }

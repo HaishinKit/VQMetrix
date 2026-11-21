@@ -3,7 +3,7 @@ import Testing
 @testable import VQMetrix
 
 struct SoftwareCodecTests {
-    @Test(arguments: [BenchmarkCodec.vp9, .av1])
+    @Test(arguments: [BenchmarkCodec.vp8, .vp9, .av1])
     func softwareConversionDecodingAndStatistics(codec: BenchmarkCodec) async throws {
         let settings = BenchmarkSettings(codec: codec, bitrate: 300_000)
         #expect(settings.isValid)

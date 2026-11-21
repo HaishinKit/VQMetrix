@@ -18,9 +18,10 @@ actor SoftwareCodecWorker {
     init(settings: BenchmarkSettings, width: Int, height: Int, fps: Float) throws {
         self.width = width; self.height = height
         converter = try SoftwareInputConverter()
-        if settings.codec == .vp9 {
-            vpxEncoder = try VPXVideoEncoder(settings: .init(videoSize: CGSize(width: width, height: height), bitRate: settings.bitrate, expectedFrameRate: Double(fps), format: .vp9))
-            vpxDecoder = try VPXVideoDecoder(format: .vp9); aomEncoder = nil; aomDecoder = nil
+        if settings.codec == .vp8 || settings.codec == .vp9 {
+            let format: VPXVideoCodecSettings.Format = settings.codec == .vp8 ? .vp8 : .vp9
+            vpxEncoder = try VPXVideoEncoder(settings: .init(videoSize: CGSize(width: width, height: height), bitRate: settings.bitrate, expectedFrameRate: Double(fps), format: format))
+            vpxDecoder = try VPXVideoDecoder(format: format); aomEncoder = nil; aomDecoder = nil
         } else {
             aomEncoder = try AOMVideoEncoder(settings: .init(videoSize: CGSize(width: width, height: height), bitRate: settings.bitrate, expectedFrameRate: Double(fps)))
             aomDecoder = try AOMVideoDecoder(); vpxEncoder = nil; vpxDecoder = nil

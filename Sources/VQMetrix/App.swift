@@ -218,6 +218,7 @@ struct BenchmarkView: View {
                 Metric(title: language.text("Evaluated / decoded frames"), value: "\(engine.scores.count) / \(engine.decodedFrames)")
                 Metric(title: language.text("Elapsed time"), value: language.text("%@ s", String(format: "%.1f", engine.currentPTS)))
             }.padding(.vertical, 4)
+            if let statistics = engine.realtimeStatistics { RealtimeStatisticsView(statistics: statistics, language: language) }
             if let statistics = engine.encoderStatistics { EncoderStatisticsView(statistics: statistics, language: language) }
             ScoreTargetControl(language: language).disabled(search.isRunning)
             ScoreChart(points: engine.scores, language: language, targetScore: targetScore).equatable()

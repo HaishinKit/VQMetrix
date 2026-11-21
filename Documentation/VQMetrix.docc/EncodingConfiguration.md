@@ -8,7 +8,7 @@ The input timeline continues across segments.
 ## Profiles
 
 H.264 supports Baseline, Main, and High. HEVC (H.265) supports Main and Main 10.
-VP9 uses libvpx (Profile 0), and AV1 uses libaom (Main profile). Both software
+VP8 and VP9 use libvpx (Profile 0), and AV1 uses libaom (Main profile). These software
 codecs currently use 8-bit SDR 4:2:0. VQMetrix resizes and converts the input to
 video-range I420 before passing it to the codec wrapper. Software encoding and
 decoding run on a separate serial worker. Live mode retains a bounded mixer

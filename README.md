@@ -7,7 +7,7 @@
 
 Video quality development tools built on HaishinKit.
 
-- **macOS:** choose VMAF v1 or v0.6.1, compare reference and decoded video, change H.264/HEVC/VP9/AV1 and bitrate, inspect VMAF and encoder/sender statistics, estimate bitrate for a target mean VMAF, and review saved runs and HTML reports.
+- **macOS:** choose VMAF v1 or v0.6.1, compare reference and decoded video, change H.264/HEVC/VP8/VP8/VP9/AV1 and bitrate, inspect VMAF and encoder/sender statistics, estimate bitrate for a target mean VMAF, and review saved runs and HTML reports.
 - **Android (HaishinKit Example):** create exact YUV references from a camera or test pattern, encode bitrate variants, and prepare checksummed upload packages.
 - **Transfer:** LAN HTTP / HTTPS upload client and Bonjour discovery with a versioned package format. The macOS app receives LAN HTTP uploads, advertises Bonjour, and queues VMAF evaluations into History.
 

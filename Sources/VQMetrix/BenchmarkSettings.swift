@@ -4,14 +4,24 @@ import VideoToolbox
 package enum BenchmarkCodec: String, CaseIterable, Codable, Sendable {
     case h264 = "H.264"
     case hevc = "HEVC"
+    case vp8 = "VP8"
     case vp9 = "VP9"
     case av1 = "AV1"
 
     package var profiles: [BenchmarkProfile] {
-        switch self { case .h264: [.baseline, .main, .high]; case .hevc: [.main, .main10]; case .vp9: [.profile0]; case .av1: [.main] }
+        switch self { case .h264: [.baseline, .main, .high]; case .hevc: [.main, .main10]; case .vp8, .vp9: [.profile0]; case .av1: [.main] }
     }
-    package var isSoftware: Bool { self == .vp9 || self == .av1 }
-    package var defaultProfile: BenchmarkProfile { self == .vp9 ? .profile0 : .main }
+    package var isSoftware: Bool { self == .vp8 || self == .vp9 || self == .av1 }
+    package var codecType: CMVideoCodecType {
+        switch self {
+        case .h264: kCMVideoCodecType_H264
+        case .hevc: kCMVideoCodecType_HEVC
+        case .vp8: 0x76703038 // vp08
+        case .vp9: kCMVideoCodecType_VP9
+        case .av1: kCMVideoCodecType_AV1
+        }
+    }
+    package var defaultProfile: BenchmarkProfile { (self == .vp8 || self == .vp9) ? .profile0 : .main }
 }
 
 package enum BenchmarkProfile: String, CaseIterable, Codable, Sendable {
