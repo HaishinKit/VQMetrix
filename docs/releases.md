@@ -64,4 +64,4 @@ DocC sources use `Documentation/VQMetrix.docc`, with Japanese articles in
 `Localization/ja.lproj`. The current compiler does not select natural languages
 from that layout: the build stages each language separately to prevent duplicate
 articles. English and Japanese keep their existing URLs, with explicit language
-links in the articles. The published site uses the first preferred browser language (Japanese or English fallback) and remembers manual language choices. Corresponding articles retain their paths, queries, and fragments; missing Japanese pages fall back to English.
+links in the articles. The landing page is English only; its former Japanese URL redirects to the English page. DocC uses the first preferred browser language (Japanese or English fallback) and remembers manual language choices. Corresponding articles retain their paths, queries, and fragments; missing Japanese pages fall back to English.

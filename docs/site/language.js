@@ -10,7 +10,7 @@
     if (!path.endsWith('/')) path += '/';
     const japanese = path.startsWith('/ja/');
     const canonical = japanese ? path.slice(3) : path;
-    if (canonical !== '/' && !canonical.startsWith('/swift/')) return null;
+    if (!canonical.startsWith('/swift/')) return null;
     return { canonical, language: japanese ? 'ja' : 'en' };
   };
   const stored = () => { try { return localStorage.getItem(key); } catch { return null; } };

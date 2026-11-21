@@ -5,7 +5,7 @@ module SiteLocalization
   def self.install(output)
     files = Dir[File.join(output, '**/index.html')].select do |path|
       relative = path.delete_prefix(output + '/')
-      relative == 'index.html' || relative == 'ja/index.html' || relative.start_with?('swift/', 'ja/swift/')
+      relative.start_with?('swift/', 'ja/swift/')
     end
     routes = files.map { |path| '/' + path.delete_prefix(output + '/').delete_suffix('index.html') }
     translated = routes.reject { |route| route.start_with?('/ja/') }.select { |route| routes.include?('/ja' + route) }
