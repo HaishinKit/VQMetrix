@@ -7,7 +7,7 @@
 
 Video quality development tools built on HaishinKit.
 
-- **macOS:** choose VMAF v1 or v0.6.1, compare reference and decoded video, change H.264/HEVC/VP8/VP8/VP9/AV1 and bitrate, inspect VMAF and encoder/sender statistics, estimate bitrate for a target mean VMAF, and review saved runs and HTML reports.
+- **macOS:** choose VMAF v1 or v0.6.1, compare reference and decoded video, change H.264/HEVC/VP8/VP9/AV1 and bitrate, inspect VMAF and encoder/sender statistics, estimate bitrate for a target mean VMAF, and review saved runs and HTML reports.
 - **Android (HaishinKit Example):** create exact YUV references from a camera or test pattern, encode bitrate variants, and prepare checksummed upload packages.
 - **Transfer:** LAN HTTP / HTTPS upload client and Bonjour discovery with a versioned package format. The macOS app receives LAN HTTP uploads, advertises Bonjour, and queues VMAF evaluations into History.
 
@@ -20,14 +20,18 @@ See the [model guide](https://haishinkit.github.io/VQMetrix/swift/documentation/
 
 ![VQMetrix macOS measurement](Assets/Screenshots/macos-measurement.png)
 
-VQMetrix 1.3.0 evaluating four synthetic 640×360 frames with VMAF v1, encoded as H.264 Main at 2 Mbps.
-The timeline shows five score bands and a target line at 92.5.
-The displayed scores belong to this run, not a general codec benchmark.
+Local AV1 Main evaluation at 2 Mbps, using VMAF v0.6.1 and twenty synthetic 640×360 frames.
+The displayed scores apply to this sample, not to AV1 in general.
+
+![VQMetrix FPS and encoder statistics](Assets/Screenshots/macos-encoder-statistics.png)
+
+Inspect input/output FPS, queueing, drops, and pipeline latency alongside native encoder timing.
+The timeline shows five score bands and a target line at 92.5. Statistics are saved per segment in History and HTML reports.
 
 ![VQMetrix bitrate search history](Assets/Screenshots/macos-bitrate-search.png)
 
-A saved v0.6.1 search from 1.2.0 targeting mean VMAF 92.5, including all attempts and confirmation.
-The 0.5 Mbps estimate applies to this sample; the trial limit was reached before the requested precision.
+A saved AV1/v0.6.1 search targeting mean VMAF 92.5. The configured lower bound of
+0.2 Mbps met the target and passed confirmation for this sample; it is not a global minimum.
 See the [bitrate search guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/bitratesearch/).
 
 ![VQMetrix macOS device receiver](Assets/Screenshots/macos-receiver.png)
@@ -41,7 +45,7 @@ evaluated serially, and saved to History with HTML report export.
 Add JitPack to the consuming project's repositories, then use:
 
 ```kotlin
-implementation("com.github.HaishinKit:VQMetrix:1.3.0")
+implementation("com.github.HaishinKit:VQMetrix:1.4.0")
 ```
 
 See [Android installation](Android/README.md) for the complete repository setup.
@@ -51,7 +55,7 @@ Capture/encoding UI lives in HaishinKit.kt Example (API 29+).
 ## 🚀 Build
 
 macOS builds use HaishinKit.swift beside this checkout at the revision in
-[Support/dependencies.json](Support/dependencies.json), then prepare their development adapters. The current pin combines the unreleased VPXHaishinKit and AOMHaishinKit development PRs; it is not an SDK release tag:
+[Support/dependencies.json](Support/dependencies.json), then prepare their development adapters. The pin references HaishinKit.swift main with VPXHaishinKit and AOMHaishinKit merged; it is a commit reference rather than an SDK release tag:
 
 ```sh
 ruby Scripts/prepare_dependencies.rb swift
@@ -97,7 +101,7 @@ is experimental; capture availability depends on the device and environment.
 
 ## 📦 Development builds
 
-The `1.3.0` tag attaches a macOS ZIP, Android transfer library, API documentation, and
+The `1.4.0` tag attaches a macOS ZIP, Android transfer library, API documentation, and
 checksums to [GitHub Release](https://github.com/HaishinKit/VQMetrix/releases). macOS builds
 are ad hoc signed and not notarized. Android Example APK distribution is managed by HaishinKit.kt.
 

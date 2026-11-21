@@ -1,6 +1,6 @@
 # Choose a VMAF model
 
-VQMetrix 1.3.0 offers two explicitly identified SDR models, using libvmaf 3.2.0.
+VQMetrix 1.4.0 offers two explicitly identified SDR models, using libvmaf 3.2.0.
 
 | Selection | Model identifier | Evaluation |
 | --- | --- | --- |
