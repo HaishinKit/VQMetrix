@@ -21,3 +21,11 @@ iOSで同じ形式を送れる共通スキーマはありますが、このリ�
 ## Language / 言語
 
 [English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/performancemetrics/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/performancemetrics/)
+
+## Mac上のエンコーダー統計
+
+計測画面・区間ごとの履歴・保存JSON・HTMLレポートに、入力数、出力パケット数、圧縮バイト数、直近・平均・最大・累計の時間を保存します。統計のない過去の履歴も読み込めます。設定変更ごとに新しい区間として集計し、ビットレート探索も各試行の測定結果に保存します。
+
+VP9/AV1はネイティブのエンコード呼び出しの時間です。色変換・拡縮・コピー・検証・失敗した呼び出し・終了時のフラッシュ時間を除きます。フラッシュで出力されたパケットとバイト数は含みます。H.264/HEVCは投入から圧縮出力までの時間で、非同期キューの待機やスケジューリングも含みます。両者の計測範囲は異なります。
+
+単調時計を利用し、平均の分母はJSONのtimedFrameCountです。非同期処理では各フレームの時間が重なるため、累計は実行全体の経過時間とは異なります。いずれもCPU使用率・消費電力・再生までの遅延ではありません。

@@ -4,14 +4,18 @@ import VideoToolbox
 package enum BenchmarkCodec: String, CaseIterable, Codable, Sendable {
     case h264 = "H.264"
     case hevc = "HEVC"
+    case vp9 = "VP9"
+    case av1 = "AV1"
 
     package var profiles: [BenchmarkProfile] {
-        self == .h264 ? [.baseline, .main, .high] : [.main, .main10]
+        switch self { case .h264: [.baseline, .main, .high]; case .hevc: [.main, .main10]; case .vp9: [.profile0]; case .av1: [.main] }
     }
+    package var isSoftware: Bool { self == .vp9 || self == .av1 }
+    package var defaultProfile: BenchmarkProfile { self == .vp9 ? .profile0 : .main }
 }
 
 package enum BenchmarkProfile: String, CaseIterable, Codable, Sendable {
-    case baseline = "Baseline", main = "Main", high = "High", main10 = "Main 10"
+    case baseline = "Baseline", main = "Main", high = "High", main10 = "Main 10", profile0 = "Profile 0"
 
     func level(for codec: BenchmarkCodec) -> String {
         switch (codec, self) {
@@ -52,8 +56,8 @@ package struct BenchmarkSettings: Equatable, Codable, Sendable {
     package var resolution: BenchmarkResolution
     package var evaluationModel: VMAFModel
 
-    package init(codec: BenchmarkCodec, bitrate: Int, profile: BenchmarkProfile = .main, resolution: BenchmarkResolution = .source, evaluationModel: VMAFModel = .v1) {
-        self.codec = codec; self.bitrate = bitrate; self.profile = profile; self.resolution = resolution; self.evaluationModel = evaluationModel
+    package init(codec: BenchmarkCodec, bitrate: Int, profile: BenchmarkProfile? = nil, resolution: BenchmarkResolution = .source, evaluationModel: VMAFModel = .v1) {
+        self.codec = codec; self.bitrate = bitrate; self.profile = profile ?? codec.defaultProfile; self.resolution = resolution; self.evaluationModel = evaluationModel
     }
     private enum CodingKeys: String, CodingKey { case codec, bitrate, profile, resolution, evaluationModel }
     package init(from decoder: any Decoder) throws {

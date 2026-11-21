@@ -26,3 +26,7 @@ v1ではその後、両映像を短辺1080へ拡大・縮小して評価しま�
 ## Language / 言語
 
 [English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/encodingconfiguration/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/encodingconfiguration/)
+
+## VP9 / AV1
+
+VP9はlibvpx（Profile 0）、AV1はlibaom（Main）で8bit SDR 4:2:0をソフトウェア圧縮します。VQMetrix側で指定解像度への拡縮と映像レンジI420への変換を行います。圧縮・復号は画面操作と別の専用ワーカーで実行します。ライブ計測では負荷によりフレームが欠ける場合があり、欠落数も保存します。同じ参照映像で比較する場合はオフラインのビットレート探索を利用できます。

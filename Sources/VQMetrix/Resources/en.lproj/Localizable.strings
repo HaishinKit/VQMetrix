@@ -220,3 +220,20 @@
 "VMAF v1 supports aspect ratios up to 4:1." = "VMAF v1 supports aspect ratios up to 4:1.";
 "VMAF v1 requires encoded dimensions of at least 180 × 150. Choose a larger output or VMAF v0.6.1." = "VMAF v1 requires encoded dimensions of at least 180 × 150. Choose a larger output or VMAF v0.6.1.";
 "VMAF evaluation" = "VMAF evaluation";
+
+// Encoder statistics
+"Encoder statistics" = "Encoder statistics";
+"Last encode" = "Last encode";
+"Mean encode" = "Mean encode";
+"Maximum encode" = "Maximum encode";
+"Total encode" = "Total encode";
+"Submitted / packets" = "Submitted / packets";
+"Encoded payload" = "Encoded payload";
+"Encoder" = "Encoder";
+"Timing scope" = "Timing scope";
+"Native encode call" = "Native encode call";
+"Submission to output" = "Submission to output";
+"Native encode time excludes conversion and copying; it is not CPU utilization." = "Native encode time excludes conversion and copying; it is not CPU utilization.";
+"Submission-to-output time includes asynchronous encoder queues; it is not native encode time or CPU utilization." = "Submission-to-output time includes asynchronous encoder queues; it is not native encode time or CPU utilization.";
+"Encoder timing scopes differ by backend; these values are not CPU utilization." = "Encoder timing scopes differ by backend; these values are not CPU utilization.";
+"Software VP9/AV1 encoding runs on a worker. Slow encoding may skip frames in live mode; use offline search for repeatable comparisons." = "Software VP9/AV1 encoding runs on a worker. Slow encoding may skip frames in live mode; use offline search for repeatable comparisons.";

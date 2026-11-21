@@ -71,3 +71,20 @@ The HTML report exports a per-variant summary and latency graphs alongside VMAF.
 ## Language / 言語
 
 [English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/performancemetrics/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/performancemetrics/)
+
+## Local encoder statistics
+
+The live screen, each History segment, saved JSON, and HTML reports include encoder
+statistics. Older histories without statistics remain readable. Each segment starts
+new counters, including when changing bitrate, profile, codec, or resolution. Search
+trial measurements also retain these values in their individual run histories.
+
+- VP9/AV1: native encode-call wall time (last, mean, maximum, and cumulative seconds),
+  accepted frames, returned packets, and compressed payload bytes. Conversion, copying,
+  validation, failed calls, and flushing time are excluded; drained output is counted.
+- H.264/HEVC: submission-to-encoded-output wall time, including asynchronous queueing
+  and scheduling. This is not the same measurement as a native software encode call.
+
+Timing uses a monotonic clock. `timedFrameCount` is the mean's denominator. Cumulative
+per-frame times may overlap for asynchronous encoders and are not total run wall time.
+Neither scope is CPU utilization, power consumption, or end-to-end playback latency.

@@ -109,6 +109,11 @@ struct LiveBenchmarkTests {
                 #expect(report.referenceWidth == 640 && report.referenceHeight == 360)
                 #expect(report.encodedProfile == profile.rawValue)
                 #expect(report.evaluatedFrames > 0)
+                let statistics = try #require(report.encoderStatistics)
+                #expect(statistics.outputPacketCount == UInt64(report.encodedFrames))
+                #expect(statistics.encodedByteCount == UInt64(report.encodedBytes))
+                #expect(statistics.timedFrameCount > 0 && statistics.totalEncodingDuration > 0)
+                #expect(engine.encoderStatistics == statistics)
                 #expect(engine.scores.allSatisfy { $0.score.isFinite })
                 if let output = engine.resultDirectory { try? FileManager.default.removeItem(at: output) }
             }
@@ -157,6 +162,31 @@ struct LiveBenchmarkTests {
             let stopped = try JSONDecoder().decode(SavedRun.self, from: Data(contentsOf: cancelledOutput.appendingPathComponent("live-summary.json")))
             #expect(stopped.stoppedByUser && !stopped.completeEvaluation)
         }
+    }
+
+    @Test(arguments: [BenchmarkCodec.vp9, .av1]) func softwareSearchSavesStatistics(codec: BenchmarkCodec) async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let input = directory.appendingPathComponent("software-search.mp4")
+        try await fixture(input)
+        let engine = LiveBenchmark()
+        let search = BitrateSearch()
+        var configuration = BitrateSearchConfiguration()
+        configuration.target = 0; configuration.sampleSeconds = 0.4
+        search.start(input: input, settings: .init(codec: codec, bitrate: 500_000, resolution: .p180, evaluationModel: .legacy), configuration: configuration, engine: engine)
+        try await wait { !search.isRunning }
+        let report = try #require(search.report)
+        #expect(report.status == .lowerBoundReached)
+        let output = try #require(search.resultDirectory)
+        defer { try? FileManager.default.removeItem(at: output) }
+        let saved = try await HistoryStore(root: output.deletingLastPathComponent()).detail(output).run
+        #expect(saved.completeEvaluation && saved.inputFrames == 4 && saved.evaluatedFrames == 4)
+        let statistics = try #require(saved.segments.first?.encoderStatistics)
+        #expect(statistics.submittedFrameCount == 4 && statistics.outputPacketCount == 4)
+        #expect(statistics.encodedByteCount > 0 && statistics.totalEncodingDuration > 0)
+        #expect(saved.segments.first?.unmatchedDecoded == 0)
+        #expect(ReportRenderer.html(run: saved, annotation: .init(), date: Date(), id: "test", language: .english).contains("Encoder statistics"))
     }
 
 }

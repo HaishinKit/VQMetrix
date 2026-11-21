@@ -220,3 +220,20 @@
 "VMAF v1 supports aspect ratios up to 4:1." = "VMAF v1で扱えるアスペクト比は最大4:1です。";
 "VMAF v1 requires encoded dimensions of at least 180 × 150. Choose a larger output or VMAF v0.6.1." = "VMAF v1の圧縮映像は180 × 150以上が必要です。出力サイズを大きくするかv0.6.1を選んでください。";
 "VMAF evaluation" = "VMAF評価";
+
+// Encoder statistics
+"Encoder statistics" = "エンコーダー統計";
+"Last encode" = "直近のエンコード";
+"Mean encode" = "平均エンコード";
+"Maximum encode" = "最大エンコード";
+"Total encode" = "エンコード累計";
+"Submitted / packets" = "入力 / 出力パケット";
+"Encoded payload" = "圧縮データ量";
+"Encoder" = "エンコーダー";
+"Timing scope" = "計測範囲";
+"Native encode call" = "ネイティブのエンコード処理";
+"Submission to output" = "投入から圧縮出力まで";
+"Native encode time excludes conversion and copying; it is not CPU utilization." = "色変換やコピーを除いたエンコード処理の時間です。CPU使用率ではありません。";
+"Submission-to-output time includes asynchronous encoder queues; it is not native encode time or CPU utilization." = "投入から圧縮出力までの時間で、非同期キューの待機を含みます。ネイティブ処理時間やCPU使用率ではありません。";
+"Encoder timing scopes differ by backend; these values are not CPU utilization." = "エンコーダーにより時間の計測範囲が異なります。これらの値はCPU使用率ではありません。";
+"Software VP9/AV1 encoding runs on a worker. Slow encoding may skip frames in live mode; use offline search for repeatable comparisons." = "VP9/AV1は専用ワーカーでソフトウェア圧縮します。ライブ計測では負荷によりフレームが欠けることがあります。再現性のある比較にはオフライン探索を使ってください。";

@@ -8,7 +8,14 @@ The input timeline continues across segments.
 ## Profiles
 
 H.264 supports Baseline, Main, and High. HEVC (H.265) supports Main and Main 10.
-Level selection is automatic. Availability depends on VideoToolbox and the Mac;
+VP9 uses libvpx (Profile 0), and AV1 uses libaom (Main profile). Both software
+codecs currently use 8-bit SDR 4:2:0. VQMetrix resizes and converts the input to
+video-range I420 before passing it to the codec wrapper. Software encoding and
+decoding run on a separate serial worker. Live mode retains a bounded mixer
+queue and reports skipped frames when the device cannot keep up; bitrate search
+replays the same reference offline.
+
+For H.264/HEVC, level selection is automatic. Availability depends on VideoToolbox and the Mac;
 an unsupported setting fails the measurement rather than being reported as a
 successful fallback. The app checks the encoded configuration record and output
 dimensions, and saves actual profile and dimensions in each segment report.

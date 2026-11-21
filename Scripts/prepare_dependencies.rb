@@ -14,6 +14,12 @@ requested.each do |kind|
   if kind == 'android' && ready
     ready = File.read(File.join(directory, 'app/vqmetrix/build.gradle.kts')).include?('com.github.HaishinKit:VQMetrix:')
   end
+  if kind == 'swift' && ready
+    manifest = File.read(File.join(directory, 'Package.swift'))
+    unless %w[VPXHaishinKit AOMHaishinKit].all? { |product| manifest.include?("name: \"#{product}\"") }
+      abort "VP9/AV1 require #{name} at #{versions.fetch(kind).fetch('revision')}; use a separate checkout to preserve local changes."
+    end
+  end
   next if ready
   head,status = Open3.capture2('git','rev-parse','HEAD', chdir: directory)
   abort "Wrong #{name} revision" unless status.success? && head.strip == versions.fetch(kind).fetch('revision')
