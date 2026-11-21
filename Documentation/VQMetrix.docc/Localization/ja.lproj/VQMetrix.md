@@ -21,3 +21,9 @@ macOSで計測・受信・履歴の確認とレポート出力を行います。
 - <doc:PerformanceMetrics>
 
 - <doc:BitrateSearch>
+
+- <doc:EvaluationModels>
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/)

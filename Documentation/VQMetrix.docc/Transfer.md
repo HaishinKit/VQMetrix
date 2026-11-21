@@ -132,3 +132,7 @@ The receiver validates available timing/count data, preserves the original manif
 and stores measurements in history and HTML reports. Missing measurements remain absent.
 Older packages without performance data still work. The transfer AAR only transports
 these packages; it does not collect performance or depend on a particular codec library.
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/transfer/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/transfer/)

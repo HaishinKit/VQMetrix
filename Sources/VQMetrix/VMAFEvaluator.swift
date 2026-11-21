@@ -13,7 +13,10 @@ package func check(_ status: Int32, _ operation: String) throws {
 
 /// Confined to the evaluation worker; retains two pairs for boundary overlap.
 package final class VMAFEvaluator {
-    package static let modelVersion = "vmaf_v0.6.1"
+    private let evaluationModel: VMAFModel
+    private let scaler: EvaluationScaler
+    private let encoding: VMAFEncoding?
+    private var evaluationDimensions: (width: Int, height: Int)?
     private var context: OpaquePointer?
     private var model: OpaquePointer?
     private var transfer: VTPixelTransferSession?
@@ -23,7 +26,9 @@ package final class VMAFEvaluator {
     private var tail: [(CVPixelBuffer, CVPixelBuffer)] = []
     package private(set) var scores: [Double] = []
 
-    package init(windowFrames: UInt32 = 30) throws {
+    package init(windowFrames: UInt32 = 30, model selection: VMAFModel = .v1, encoding: VMAFEncoding? = nil) throws {
+        self.evaluationModel = selection
+        self.encoding = encoding; self.scaler = try EvaluationScaler()
         guard windowFrames >= 2 else { throw QualityError("Evaluation window must contain at least two frames") }
         self.windowFrames = windowFrames
         var config = VmafConfiguration()
@@ -34,12 +39,25 @@ package final class VMAFEvaluator {
         try check(vmaf_init(&context, config), "vmaf_init")
         do {
             var modelConfig = VmafModelConfig()
-            try check(vmaf_model_load(&model, &modelConfig, Self.modelVersion), "vmaf_model_load")
+            try check(vmaf_model_load(&model, &modelConfig, evaluationModel.rawValue), "vmaf_model_load")
+            if selection == .v1, let encoding {
+                guard encoding.width >= 180, encoding.height >= 150 else {
+                    throw QualityError("VMAF v1 requires encoded dimensions of at least 180 × 150. Choose a larger output or VMAF v0.6.1.")
+                }
+                var options: OpaquePointer?
+                do {
+                    for (key, value) in [("enc_width", encoding.width), ("enc_height", encoding.height), ("enc_bitdepth", encoding.bitDepth)] {
+                        try check(vmaf_feature_dictionary_set(&options, key, String(value)), "CAMBI encoding options")
+                    }
+                } catch { vmaf_feature_dictionary_free(&options); throw error }
+                // libvmaf consumes the options dictionary, including on overload failure.
+                try check(vmaf_model_feature_overload(model, "cambi", options), "CAMBI model options")
+            }
             try check(vmaf_use_features_from_model(context, model), "vmaf_use_features_from_model")
             try check(VTPixelTransferSessionCreate(allocator: nil, pixelTransferSessionOut: &transfer), "pixel transfer")
         } catch {
-            if let model { vmaf_model_destroy(model) }
-            if let context { vmaf_close(context) }
+            if let model { vmaf_model_destroy(model); self.model = nil }
+            if let context { vmaf_close(context); self.context = nil }
             throw error
         }
     }
@@ -50,16 +68,25 @@ package final class VMAFEvaluator {
         if let model { vmaf_model_destroy(model) }
     }
 
-    private func picture(_ source: CVPixelBuffer) throws -> VmafPicture {
+    private func picture(_ original: CVPixelBuffer) throws -> VmafPicture {
+        let originalWidth = CVPixelBufferGetWidth(original), originalHeight = CVPixelBufferGetHeight(original)
+        guard originalWidth > 0, originalHeight > 0 else { throw QualityError("Invalid evaluation dimensions") }
+        if evaluationModel == .v1, max(originalWidth, originalHeight) > min(originalWidth, originalHeight) * 4 {
+            throw QualityError("VMAF v1 supports aspect ratios up to 4:1.")
+        }
+        let dimensions = evaluationModel.dimensions(width: originalWidth, height: originalHeight)
+        evaluationDimensions = dimensions
+        let pixelFormat = evaluationModel == .v1 ? kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+        let source = try scaler.resize(original, width: dimensions.width, height: dimensions.height, pixelFormat: pixelFormat)
         let width = CVPixelBufferGetWidth(source)
         let height = CVPixelBufferGetHeight(source)
         let normalized: CVPixelBuffer
-        if CVPixelBufferGetPixelFormatType(source) == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange {
+        if CVPixelBufferGetPixelFormatType(source) == pixelFormat {
             normalized = source
         } else {
             var converted: CVPixelBuffer?
             try check(CVPixelBufferCreate(nil, width, height,
-                kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                pixelFormat,
                 [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &converted), "pixel buffer")
             guard let converted, let transfer else { throw QualityError("Missing pixel transfer buffer") }
             try check(VTPixelTransferSessionTransferImage(transfer, from: source, to: converted), "pixel conversion")
@@ -68,7 +95,7 @@ package final class VMAFEvaluator {
         try check(CVPixelBufferLockBaseAddress(normalized, .readOnly), "pixel lock")
         defer { CVPixelBufferUnlockBaseAddress(normalized, .readOnly) }
         var result = VmafPicture()
-        try check(vmaf_picture_alloc(&result, VMAF_PIX_FMT_YUV420P, 8, UInt32(width), UInt32(height)), "picture allocation")
+        try check(vmaf_picture_alloc(&result, VMAF_PIX_FMT_YUV420P, UInt32(evaluationModel.bitDepth), UInt32(width), UInt32(height)), "picture allocation")
         guard let y = CVPixelBufferGetBaseAddressOfPlane(normalized, 0),
               let uv = CVPixelBufferGetBaseAddressOfPlane(normalized, 1),
               let destY = result.data.0, let destU = result.data.1, let destV = result.data.2 else {
@@ -78,15 +105,27 @@ package final class VMAFEvaluator {
         let yStride = CVPixelBufferGetBytesPerRowOfPlane(normalized, 0)
         let uvStride = CVPixelBufferGetBytesPerRowOfPlane(normalized, 1)
         for row in 0..<height {
-            memcpy(destY.advanced(by: row * result.stride.0), y.advanced(by: row * yStride), width)
+            if evaluationModel == .legacy {
+                memcpy(destY.advanced(by: row * result.stride.0), y.advanced(by: row * yStride), width)
+            } else {
+                let input = y.advanced(by: row * yStride).assumingMemoryBound(to: UInt16.self)
+                let output = destY.advanced(by: row * result.stride.0).assumingMemoryBound(to: UInt16.self)
+                for col in 0..<width { output[col] = input[col] >> 6 }
+            }
         }
         for row in 0..<(height / 2) {
             let source = uv.advanced(by: row * uvStride).assumingMemoryBound(to: UInt8.self)
             let u = destU.advanced(by: row * result.stride.1).assumingMemoryBound(to: UInt8.self)
             let v = destV.advanced(by: row * result.stride.2).assumingMemoryBound(to: UInt8.self)
             for col in 0..<(width / 2) {
-                u[col] = source[col * 2]
-                v[col] = source[col * 2 + 1]
+                if evaluationModel == .legacy {
+                    u[col] = source[col * 2]; v[col] = source[col * 2 + 1]
+                } else {
+                    let u10 = destU.advanced(by: row * result.stride.1).assumingMemoryBound(to: UInt16.self)
+                    let v10 = destV.advanced(by: row * result.stride.2).assumingMemoryBound(to: UInt16.self)
+                    let input10 = uv.advanced(by: row * uvStride).assumingMemoryBound(to: UInt16.self)
+                    u10[col] = input10[col * 2] >> 6; v10[col] = input10[col * 2 + 1] >> 6
+                }
             }
         }
         return result
@@ -143,11 +182,13 @@ package final class VMAFEvaluator {
         try check(vmaf_read_pictures(context, nil, nil, 0), "vmaf flush")
         try collect(until: count)
         guard !scores.isEmpty else { throw QualityError("No complete VMAF results") }
-        let result: [String: Any] = [
-            "version": String(cString: vmaf_version()), "model": Self.modelVersion,
-            "windowFrames": windowFrames, "boundaryOverlapFrames": 2,
+        var result: [String: Any] = [
+            "version": String(cString: vmaf_version()), "model": evaluationModel.rawValue,
+            "evaluationBitDepth": evaluationModel.bitDepth, "evaluationSizing": evaluationModel == .v1 ? "Short side 1080; aspect ratio preserved" : "Source dimensions", "windowFrames": windowFrames, "boundaryOverlapFrames": 2,
             "frames": scores.enumerated().map { ["frameNum": $0.offset, "metrics": ["vmaf": $0.element]] as [String: Any] }
         ]
+        if let dimensions = evaluationDimensions { result["evaluationWidth"] = dimensions.width; result["evaluationHeight"] = dimensions.height }
+        if let encoding { result["encoding"] = ["width": encoding.width, "height": encoding.height, "bitDepth": encoding.bitDepth] }
         try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
             .write(to: URL(fileURLWithPath: output), options: .atomic)
     }

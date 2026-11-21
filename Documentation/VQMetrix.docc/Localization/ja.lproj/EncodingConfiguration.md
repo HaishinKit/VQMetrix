@@ -4,8 +4,8 @@ H.264はBaseline・Main・High、HEVC（H.265）はMain・Main 10を選択でき
 レベルは自動選択です。機種が対応していない場合はエラーとし、異なる設定を成功扱いにしません。
 出力ビットストリームのプロファイルと解像度を確認し、セグメントごとに履歴へ記録します。
 
-入力とVMAF評価は8-bit SDRです。Main 10を選んでもHDRに変わるわけではなく、
-元の映像にない階調を復元するものでもありません。デコード後は評価用の8-bit SDRへ変換します。
+映像取得・デコードは8-bit SDRです。Main 10を選んでもHDRに変わるわけではなく、
+元の映像にない階調を復元するものでもありません。v1は短辺1080・10-bitに変換して評価し、v0.6.1は元サイズ・8-bitの評価を維持します。<doc:EvaluationModels>を参照してください。
 
 ## 解像度
 
@@ -14,9 +14,15 @@ H.264はBaseline・Main・High、HEVC（H.265）はMain・Main 10を選択でき
 元のアスペクト比を保って収めます。縦横は偶数へ切り下げます。たとえば4:3の720p出力は960×720です。
 小さな入力を拡大する場合もありますが、元にない細部が増えるわけではありません。
 
-VMAF評価では参照映像を元のサイズに保ち、デコード後の映像をVideoToolboxのNormalスケーリングで
+VMAF評価ではまず両映像を元のサイズで揃え、デコード後の映像をVideoToolboxのNormalスケーリングで
 参照サイズへ戻します。そのため、縮小による情報の損失も比較に含まれます。
 拡大方法によってスコアは変わるため、同じ参照サイズ・モデル・前処理で比較してください。
 
 要求設定、実際の出力サイズとプロファイル、参照サイズ、評価方法をJSONへ保存します。
 履歴画面とHTMLレポートにも出力サイズを表示します。旧履歴も読み込めますが、未記録の実測値は不明として扱います。
+
+v1ではその後、両映像を短辺1080へ拡大・縮小して評価します。
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/encodingconfiguration/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/encodingconfiguration/)

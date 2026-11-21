@@ -15,9 +15,13 @@ final class EvaluationScaler {
 
     func match(_ decoded: CVPixelBuffer, to reference: CVPixelBuffer) throws -> CVPixelBuffer {
         let width = CVPixelBufferGetWidth(reference), height = CVPixelBufferGetHeight(reference)
-        guard CVPixelBufferGetWidth(decoded) != width || CVPixelBufferGetHeight(decoded) != height else { return decoded }
+        return try resize(decoded, width: width, height: height)
+    }
+
+    func resize(_ decoded: CVPixelBuffer, width: Int, height: Int, pixelFormat: OSType = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) throws -> CVPixelBuffer {
+        guard CVPixelBufferGetWidth(decoded) != width || CVPixelBufferGetHeight(decoded) != height || CVPixelBufferGetPixelFormatType(decoded) != pixelFormat else { return decoded }
         var destination: CVPixelBuffer?
-        try check(CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+        try check(CVPixelBufferCreate(nil, width, height, pixelFormat,
             [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &destination), "evaluation buffer")
         guard let session, let destination else { throw QualityError("Missing evaluation scaling buffer") }
         CVBufferPropagateAttachments(decoded, destination)

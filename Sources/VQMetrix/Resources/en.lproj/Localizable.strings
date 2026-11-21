@@ -214,3 +214,9 @@
 "Offline encoder or evaluation timed out." = "Offline encoder or evaluation timed out.";
 "Offline mixer timed out." = "Offline mixer timed out.";
 "Result" = "Result";
+"VMAF model" = "VMAF model";
+"Scores and bitrate estimates depend on the model. Uploads keep the model selected when accepted." = "Scores and bitrate estimates depend on the model. Uploads keep the model selected when accepted.";
+"VMAF v1: short side 1080, 10-bit evaluation." = "VMAF v1: short side 1080, 10-bit evaluation.";
+"VMAF v1 supports aspect ratios up to 4:1." = "VMAF v1 supports aspect ratios up to 4:1.";
+"VMAF v1 requires encoded dimensions of at least 180 × 150. Choose a larger output or VMAF v0.6.1." = "VMAF v1 requires encoded dimensions of at least 180 × 150. Choose a larger output or VMAF v0.6.1.";
+"VMAF evaluation" = "VMAF evaluation";

@@ -202,7 +202,7 @@ final class BitrateSearch: ObservableObject {
         do {
             let selected = recommended.flatMap { bitrate in trials.last(where: { $0.bitrate == bitrate && $0.confirmation }) }
             let representative = selected.flatMap { runs[$0.id] } ?? trials.last.flatMap { runs[$0.id] }
-            var saved = SavedRun(input: input?.path ?? "camera:\(camera?.id ?? "")", model: VMAFEvaluator.modelVersion,
+            var saved = SavedRun(input: input?.path ?? "camera:\(camera?.id ?? "")", model: settings.evaluationModel.rawValue,
                 libvmafVersion: representative?.libvmafVersion ?? "", inputFrames: representative?.inputFrames ?? 0,
                 evaluatedFrames: representative?.evaluatedFrames ?? 0, completeEvaluation: recommended != nil,
                 stoppedByUser: status == .cancelled, mixerQueueDropped: representative?.mixerQueueDropped ?? 0,

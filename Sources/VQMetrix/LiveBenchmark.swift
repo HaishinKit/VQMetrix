@@ -37,6 +37,9 @@ package struct SegmentReport: Codable, Sendable {
     package var referenceWidth: Int? = nil
     package var referenceHeight: Int? = nil
     package var evaluationScaling: String? = nil
+    package var evaluationWidth: Int? = nil
+    package var evaluationHeight: Int? = nil
+    package var evaluationBitDepth: Int? = nil
 }
 
 private struct VideoFrame: @unchecked Sendable { let sample: CMSampleBuffer }
@@ -131,7 +134,7 @@ private final class LiveSegment {
         let progress = replayProgress
         worker = Task.detached {
             do {
-                let evaluator = try VMAFEvaluator(windowFrames: UInt32(max(2, Int(fps.rounded()))))
+                let evaluator = try VMAFEvaluator(windowFrames: UInt32(max(2, Int(fps.rounded()))), model: settings.evaluationModel, encoding: VMAFEncoding(width: settings.resolution.dimensions(width: width, height: height).width, height: settings.resolution.dimensions(width: width, height: height).height, bitDepth: settings.profile == .main10 ? 10 : 8))
                 var timestamps: [(pts: Double, arrived: Double)] = []
                 var published = 0
                 func points() -> [QualityPoint] {
@@ -254,7 +257,10 @@ private final class LiveSegment {
             meanVMAF: scores.isEmpty ? nil : scores.reduce(0, +) / Double(scores.count),
             encodedWidth: encodedWidth, encodedHeight: encodedHeight, encodedProfile: encodedProfile,
             referenceWidth: referenceWidth, referenceHeight: referenceHeight,
-            evaluationScaling: "VideoToolbox normal scaling to source dimensions; 8-bit SDR VMAF")
+            evaluationScaling: "VideoToolbox normal scaling; \(settings.evaluationModel.bitDepth)-bit SDR VMAF; \(settings.evaluationModel == .v1 ? "short side 1080" : "source dimensions")",
+            evaluationWidth: settings.evaluationModel.dimensions(width: referenceWidth, height: referenceHeight).width,
+            evaluationHeight: settings.evaluationModel.dimensions(width: referenceWidth, height: referenceHeight).height,
+            evaluationBitDepth: settings.evaluationModel.bitDepth)
     }
 
     func abort() async {
@@ -321,7 +327,7 @@ package final class LiveBenchmark: ObservableObject {
     }
 
     package func apply(_ settings: BenchmarkSettings) {
-        guard isRunning, !stopRequested, !offlineReplay, settings.isValid else { return }
+        guard isRunning, !stopRequested, !offlineReplay, settings.isValid, settings.evaluationModel == activeSettings?.evaluationModel else { return }
         pending = settings
         isApplying = true
         setStatus("Applying settings…")
@@ -565,7 +571,7 @@ extension LiveBenchmark {
                          mixerDropped: Int, undelivered: Int, failure: String? = nil) throws {
         guard let resultDirectory else { return }
         let complete = failure == nil && scores.count == inputFrames
-        var summary = SavedRun(input: input, model: VMAFEvaluator.modelVersion,
+        var summary = SavedRun(input: input, model: (activeSettings?.evaluationModel ?? .v1).rawValue,
             libvmafVersion: String(cString: vmaf_version()), inputFrames: inputFrames,
             evaluatedFrames: scores.count, completeEvaluation: complete, stoppedByUser: stopRequested,
             mixerQueueDropped: mixerDropped, mixerUndelivered: max(0, undelivered), segments: reports, scores: scores)

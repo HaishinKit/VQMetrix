@@ -3,7 +3,7 @@
 ## Macで計測する
 
 1. 映像ファイルまたはカメラを選択します。カメラは「計測開始」で使用許可を求めます。音声は取得しません。クラムシェル状態では内蔵カメラを使用できないため、iPhoneの連係カメラや外付けカメラを選んでください。
-2. コーデック、プロファイル、出力解像度、ビットレートと計測時間を設定します。
+2. コーデック、プロファイル、出力解像度、ビットレート、計測時間とVMAFモデルを設定します。
 3. 「計測開始」で元の映像とエンコード・デコード後の映像を比較します。
 4. 計測中は「変更を適用」で新しいセグメントを開始できます。切り替え時に処理を完了させるため、一時停止することがあります。
 5. 「履歴」から計測結果を開き、タイトルやメモを保存し、HTMLレポートを出力できます。
@@ -22,3 +22,11 @@
 1.0.0からの最初の更新は手動でダウンロードしてください。更新署名はAppleの公証とは別の仕組みです。
 
 詳細は<doc:UnderstandingVMAF>、<doc:EncodingConfiguration>、<doc:Transfer>を参照してください。
+
+## 評価モデル
+
+v1（標準）とv0.6.1を選べます。履歴・レポートには使用したモデルを記録します。異なるモデルのスコアを同じ基準で比較せず、<doc:EvaluationModels>で評価条件を確認してください。
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/userguide/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/userguide/)

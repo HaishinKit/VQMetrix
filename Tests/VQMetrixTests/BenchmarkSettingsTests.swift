@@ -6,6 +6,7 @@ struct BenchmarkSettingsTests {
     @Test func oldHistoriesKeepTheirOriginalSettings() throws {
         let old = Data(#"{"codec":"H.264","bitrate":1000000}"#.utf8)
         let settings = try JSONDecoder().decode(BenchmarkSettings.self, from: old)
+        #expect(settings.evaluationModel == .legacy)
         #expect(settings.profile == .main)
         #expect(settings.resolution == .source)
         #expect(settings.isValid)

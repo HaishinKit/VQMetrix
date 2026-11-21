@@ -21,3 +21,7 @@ VQMetrixのAndroidライブラリーは発見と転送を提供し、HaishinKit�
 ZIPには参照YUV、各コーデックの映像、フレームの対応情報、チェックサムと任意の負荷情報を含めます。
 動画のみを対象とし、音声は評価しません。破損したファイルやパスの不正を含むZIPは受け付けません。
 詳細な形式は[転送仕様](https://github.com/HaishinKit/VQMetrix/blob/main/docs/transfer.md)を参照してください。
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/transfer/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/transfer/)

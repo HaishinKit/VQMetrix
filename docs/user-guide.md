@@ -57,10 +57,7 @@ For source development, set `vqmetrixTransferDir` to VQMetrix/Android/transfer.
 
 ## Interpreting results
 
-The pinned model is `vmaf_v0.6.1`. Both sides use the same resolution; no automatic
-resizing is performed. Local macOS measurement evaluates mixer track 0, not offscreen
-screen composition, network loss, transport, or receiver/player behavior. This model
-does not comprehensively measure chroma fidelity.
+VQMetrix 1.3.0 selects VMAF v1 by default, with v0.6.1 available for comparison. The model is fixed for each run. v1 uses 10-bit evaluation at a short-side-1080 display size; v0.6.1 keeps source-size 8-bit evaluation. Local measurement excludes network delivery and receiver/player behavior. See the DocC model-selection guide for preprocessing and comparison limits.
 
 Queues are bounded. A partial run's score covers only evaluated frames, and temporal
 gaps alter motion features. Compare complete runs and matching source/model conditions.

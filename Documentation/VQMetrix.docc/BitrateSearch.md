@@ -51,3 +51,9 @@ current target does not change a saved search target.
 The results folder contains `reference.mov`, per-trial results under `trials/`,
 `live-summary.json`, and `history.json`. Reference recordings remain on disk until
 you remove the result folder; consider storage and privacy when recording a camera.
+
+Starting in 1.3.0, select the VMAF model before searching. Every candidate and confirmation keeps that model. See <doc:EvaluationModels>.
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/bitratesearch/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/bitratesearch/)

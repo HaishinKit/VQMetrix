@@ -92,6 +92,7 @@ struct BitrateSearchResultView: View {
                 Text(language.text("Estimated bitrate: %@ Mbps", String(format: "%.3f", Double(bitrate) / 1_000_000)))
                     .font(.title2).monospacedDigit()
             }
+            Text(report.settings.evaluationModel.label).font(.callout)
             Text(language.text("Target mean VMAF: %@", String(format: "%.2f", report.configuration.target)))
             if let note = report.note { Text(language.text(note)).foregroundStyle(.red) }
             Text(language.text("Results apply only to this sample. A confirmed estimate does not guarantee a global minimum or live-network suitability."))

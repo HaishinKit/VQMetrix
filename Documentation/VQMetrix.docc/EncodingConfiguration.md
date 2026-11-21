@@ -13,9 +13,9 @@ an unsupported setting fails the measurement rather than being reported as a
 successful fallback. The app checks the encoded configuration record and output
 dimensions, and saves actual profile and dimensions in each segment report.
 
-This is an **8-bit SDR input/evaluation pipeline**. Choosing HEVC Main 10 changes
+This is an **8-bit SDR capture/decode pipeline**. Choosing HEVC Main 10 changes
 the requested encoded profile; it does not add HDR or recover precision absent from
-the input. Decoded frames are normalized to 8-bit SDR for the existing VMAF model.
+the input. VMAF v1 then evaluates an upscaled, 10-bit representation; v0.6.1 keeps 8-bit source-size evaluation. See <doc:EvaluationModels>.
 
 ## Resolution and aspect ratio
 
@@ -26,7 +26,7 @@ not a stretched 1280×720 frame. A preset may upscale a smaller source; it canno
 create additional source detail. The actual result is shown in History.
 
 Before VMAF evaluation, the decoded output is resized back to the **source dimensions**
-using VideoToolbox normal scaling. The reference is kept at its original size, so
+using VideoToolbox normal scaling. For v1, both matched images are then scaled to a short side of 1080. For v0.6.1, the reference stays at its original size. In both cases,
 loss introduced by downscaling remains part of the comparison. The resampling method
 can affect scores and may differ from FFmpeg or a viewer's scaler. Compare runs with
 the same reference dimensions, model, and evaluation method; scores from different
@@ -39,3 +39,7 @@ are shown as unknown.
 
 See [Netflix's VMAF FAQ](https://github.com/Netflix/vmaf/blob/master/resource/doc/faq.md)
 and [Apple's profile-level documentation](https://developer.apple.com/documentation/videotoolbox/kvtcompressionpropertykey_profilelevel).
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/encodingconfiguration/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/encodingconfiguration/)

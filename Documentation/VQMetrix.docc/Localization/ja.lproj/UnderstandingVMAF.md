@@ -6,7 +6,7 @@ VMAF（Video Multimethod Assessment Fusion）は、Netflixが開発した学習�
 参照映像と、圧縮・復元した映像の対応するフレームを比較します。一般に点数が高いほど、そのモデルが想定する
 視聴条件で参照映像に近いと推定されます。「画素が何％残ったか」「視聴者の何％が満足するか」という割合ではありません。
 
-VQMetrix 1.0は **vmaf_v0.6.1** を使い、通常 **0〜100点** で表示します。
+VQMetrix 1.3.0は **vmaf_v1.0.16_3d0h** を標準とし、**vmaf_v0.6.1** も選択できます。どちらも **0〜100点** を目安に表示します。<doc:EvaluationModels>を参照してください。
 モデルや設定が変われば、想定する視聴条件やスコア範囲も変わります。同じ映像どうしでも必ず100点になるわけではありません。
 
 ## スコアの目安
@@ -47,7 +47,7 @@ macOSの計測は端末内で圧縮・復元します。アップロードした
 音質、ネットワークでの配信状況、視聴者までの遅延、再バッファリングなど、視聴体験全体の評価は含みません。
 評価できなかったフレームは別に記録します。高い平均点だけで「コマ落ちがない」とは判断しません。
 
-既定のv0.6.1モデルにはHDTV・リビング視聴の想定があります。
+従来のv0.6.1モデルにはHDTV・リビング視聴の想定があります。
 モバイル端末で作った素材を評価しても、自動でスマートフォン向けモデルに切り替わるわけではありません。
 
 ## 参考資料
@@ -58,3 +58,7 @@ macOSの計測は端末内で圧縮・復元します。アップロードした
 - [Netflix: VMAF, The Journey Continues](https://netflixtechblog.com/vmaf-the-journey-continues-44b51ee9ed12)
 
 [English guide](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/understandingvmaf/)
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/understandingvmaf/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/understandingvmaf/)

@@ -17,3 +17,7 @@ Android Exampleがアップロードする各ビットレートの映像には�
 
 iOSで同じ形式を送れる共通スキーマはありますが、このリリースにiOS用の収録・負荷収集アプリは含みません。
 負荷情報がない旧パッケージも評価できます。
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/performancemetrics/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/performancemetrics/)

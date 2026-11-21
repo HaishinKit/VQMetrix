@@ -31,6 +31,7 @@ package struct HistoryEntry: Identifiable, Sendable {
     package let directory: URL
     package let date: Date
     package let source: String
+    package let model: String
     package let sourceKind: String
     package let inputFrames: Int
     package let evaluatedFrames: Int
@@ -85,7 +86,7 @@ package actor HistoryStore {
                 var labels: [String] = []
                 for segment in metadata.segments where !labels.contains(segment.settings.label) { labels.append(segment.settings.label) }
                 entries.append(HistoryEntry(directory: directory, date: date, source: name,
-                    sourceKind: metadata.sourceKind ?? "file", inputFrames: metadata.inputFrames,
+                    model: metadata.model, sourceKind: metadata.sourceKind ?? "file", inputFrames: metadata.inputFrames,
                     evaluatedFrames: metadata.evaluatedFrames, complete: metadata.completeEvaluation,
                     settings: labels.joined(separator: " → "), mean: mean, failure: metadata.failure, annotation: annotation))
             } catch { unreadable += 1 }
@@ -156,7 +157,7 @@ package enum ReportRenderer {
             "<line x1=\"45\" x2=\"855\" y1=\"\(220 - value * 2)\" y2=\"\(220 - value * 2)\" stroke=\"#e2e8f0\"/><text x=\"34\" y=\"\(224 - value * 2)\" text-anchor=\"end\">\(value)</text>"
         }.joined()
         let rows = run.segments.map { segment in
-            "<tr><td>\(segment.index + 1)</td><td>\(escape(segment.settings.codec.rawValue + " " + (segment.encodedProfile ?? (run.sourceKind == "upload" ? "" : segment.settings.profile.rawValue))))</td><td>\(number(Double(segment.settings.bitrate) / 1_000_000)) Mbps</td><td>\(segment.encodedWidth.map(String.init) ?? "—") × \(segment.encodedHeight.map(String.init) ?? "—")</td><td>\(number(segment.meanVMAF))</td><td>\(segment.evaluatedFrames) / \(segment.inputFrames)</td><td>\(max(0, segment.inputFrames - segment.evaluatedFrames))</td></tr>"
+            "<tr><td>\(segment.index + 1)</td><td>\(escape(segment.settings.codec.rawValue + " " + (segment.encodedProfile ?? (run.sourceKind == "upload" ? "" : segment.settings.profile.rawValue))))</td><td>\(number(Double(segment.settings.bitrate) / 1_000_000)) Mbps</td><td>\(segment.encodedWidth.map(String.init) ?? "—") × \(segment.encodedHeight.map(String.init) ?? "—")</td><td>\(segment.evaluationWidth.map(String.init) ?? segment.referenceWidth.map(String.init) ?? "—") × \(segment.evaluationHeight.map(String.init) ?? segment.referenceHeight.map(String.init) ?? "—") · \(segment.evaluationBitDepth ?? 8)-bit</td><td>\(number(segment.meanVMAF))</td><td>\(segment.evaluatedFrames) / \(segment.inputFrames)</td><td>\(max(0, segment.inputFrames - segment.evaluatedFrames))</td></tr>"
         }.joined()
         let search = run.bitrateSearch.map { $0.html(language: language) } ?? ""
         let performance = SenderPerformance.html(run.senderPerformance ?? [], language:language)
@@ -172,7 +173,7 @@ package enum ReportRenderer {
         <p class="\(run.completeEvaluation ? "meta" : "warning")">\(t(run.completeEvaluation ? "Complete evaluation" : "Partial evaluation"))\(run.stoppedByUser ? " · " + t("Stopped by user") : "")</p>\(failure)
         <div class="metrics"><div class="metric">\(t("Mean VMAF"))<strong>\(number(mean))</strong></div><div class="metric">\(t("Minimum VMAF"))<strong>\(number(minimum))</strong></div><div class="metric">\(t("Evaluated frames"))<strong>\(run.evaluatedFrames) / \(run.inputFrames)</strong></div><div class="metric">\(t("Skipped frames"))<strong>\(max(0, run.inputFrames - run.evaluatedFrames))</strong></div></div>
         \(search)<h2>\(t("VMAF timeline"))</h2><svg viewBox="0 0 900 260" role="img" aria-label="\(t("VMAF timeline"))">\(grid)\(paths)\(targetLine)<text x="45" y="244">\(number(first))</text><text x="855" y="244" text-anchor="end">\(number(last))</text></svg><p class="meta">\(t("Time (seconds)"))</p><p>\(bandLegend)</p><p class="meta">\(t("Score bands are working guidelines."))</p>
-        <h2>\(t("Encoding settings by segment"))</h2><table><thead><tr><th>\(t("Segment"))</th><th>\(t("Codec"))</th><th>\(t("Target bitrate"))</th><th>\(t("Output resolution"))</th><th>\(t("Mean VMAF"))</th><th>\(t("Evaluated frames"))</th><th>\(t("Skipped frames"))</th></tr></thead><tbody>\(rows)</tbody></table>
+        <h2>\(t("Encoding settings by segment"))</h2><table><thead><tr><th>\(t("Segment"))</th><th>\(t("Codec"))</th><th>\(t("Target bitrate"))</th><th>\(t("Output resolution"))</th><th>\(t("VMAF evaluation"))</th><th>\(t("Mean VMAF"))</th><th>\(t("Evaluated frames"))</th><th>\(t("Skipped frames"))</th></tr></thead><tbody>\(rows)</tbody></table>
         \(performance)\(notes)<p class="warning">\(t("Scores describe evaluated frames only. Missing frames and temporal gaps affect interpretation."))</p><p class="meta">\(t("Encoding and decoding run on this device. Network delivery is excluded. Skipped evaluation frames are recorded."))</p><p class="meta">\(t("Run ID")): \(escape(id))</p></main></html>
         """
     }

@@ -45,3 +45,9 @@ VMAFはビットレートに対して必ずしも単調に変化しないため�
 
 結果フォルダには`reference.mov`、`trials/`内の各試行、`live-summary.json`、`history.json`を保存します。
 参照映像は結果フォルダを削除するまで残ります。カメラ録画時は保存容量と映り込む情報を確認してください。
+
+1.3.0では探索前にVMAFモデルも選択できます。各試行と再確認は同じモデルに固定されます。<doc:EvaluationModels>を参照してください。
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/bitratesearch/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/bitratesearch/)

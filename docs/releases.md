@@ -1,7 +1,7 @@
 # Building and releasing VQMetrix
 
 The release version is stored in `VERSION`. Use the same value for the Git tag,
-application version and Android dependency: **1.2.0**, without a `v` prefix. A prefix is
+application version and Android dependency: **1.3.0**, without a `v` prefix. A prefix is
 only a tag convention; on JitPack it also becomes part of the requested version.
 
 ## Release contents
@@ -15,7 +15,7 @@ The tag workflow tests and packages:
 - A signed Sparkle appcast for stable releases after updater integration.
 - SHA256SUMS.txt for the release assets.
 
-The Android artifact is `com.github.HaishinKit:VQMetrix:1.2.0` on JitPack.
+The Android artifact is `com.github.HaishinKit:VQMetrix:1.3.0` on JitPack.
 It does not depend on HaishinKit. Capture/encoding implementations belong to the SDK
 Example. Standard `maven-publish` metadata allows other Maven repositories to be added
 later; Maven Central still requires its own account, namespace and signing setup.
@@ -59,3 +59,9 @@ completed before publishing the next stable tag.
 DocC app guides are compiled independently from `Documentation/en.lproj/VQMetrix.docc`
 and `Documentation/ja.lproj/VQMetrix.docc`. App resources and executable code share one
 SwiftPM module, `VQMetrix`. The guide site retains redirects for released 1.0.x help URLs.
+
+DocC sources use `Documentation/VQMetrix.docc`, with Japanese articles in
+`Localization/ja.lproj`. The current compiler does not select natural languages
+from that layout: the build stages each language separately to prevent duplicate
+articles. English and Japanese keep their existing URLs, with explicit language
+links in the articles. No browser-language redirect is added.

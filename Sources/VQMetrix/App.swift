@@ -91,6 +91,7 @@ private enum InputKind: String { case file, camera }
 
 struct BenchmarkView: View {
     @AppStorage("vmafTargetScore") private var targetScore = 90.0
+    @AppStorage("vmafEvaluationModel") private var evaluationModel = VMAFModel.v1
     let language: AppLanguage
     @State private var inputKind = InputKind.file
     @State private var cameras: [CameraInfo] = []
@@ -106,7 +107,7 @@ struct BenchmarkView: View {
 
     private var settings: BenchmarkSettings? {
         guard bitrateMbps.isFinite, bitrateMbps > 0, bitrateMbps <= 100 else { return nil }
-        return BenchmarkSettings(codec: codec, bitrate: Int(bitrateMbps * 1_000_000), profile: profile, resolution: resolution)
+        return BenchmarkSettings(codec: codec, bitrate: Int(bitrateMbps * 1_000_000), profile: profile, resolution: resolution, evaluationModel: evaluationModel)
     }
 
     private func chooseVideo() {
@@ -188,9 +189,10 @@ struct BenchmarkView: View {
                                 Text(language.text($0.rawValue)).tag($0)
                             }
                         }.frame(width: 230)
-                        Text(language.text("Fits the source aspect ratio. VMAF is evaluated at source size."))
+                        Text(language.text(evaluationModel == .v1 ? "VMAF v1: short side 1080, 10-bit evaluation." : "Fits the source aspect ratio. VMAF is evaluated at source size."))
                             .font(.caption).foregroundStyle(.secondary)
-                    }.disabled(engine.isApplying)
+                    } .disabled(engine.isApplying)
+                    VMAFModelPicker(language: language).disabled(engine.isRunning)
                 }.padding(8)
             }
             .disabled(search.isRunning)
@@ -198,12 +200,12 @@ struct BenchmarkView: View {
                 canStart: inputKind == .file ? input != nil : cameras.contains(where: { $0.id == cameraID }),
                 measurementRunning: engine.isRunning, isCamera: inputKind == .camera,
                 start: { configuration in
-                    let fixed = BenchmarkSettings(codec: codec, bitrate: 1_000_000, profile: profile, resolution: resolution)
+                    let fixed = BenchmarkSettings(codec: codec, bitrate: 1_000_000, profile: profile, resolution: resolution, evaluationModel: evaluationModel)
                     search.start(input: inputKind == .file ? input : nil,
                         camera: inputKind == .camera ? cameras.first(where: { $0.id == cameraID }) : nil,
                         settings: fixed, configuration: configuration, engine: engine)
                 }, useEstimate: { bitrate in
-                    if let fixed = search.report?.settings { codec = fixed.codec; profile = fixed.profile; resolution = fixed.resolution }
+                    if let fixed = search.report?.settings { codec = fixed.codec; profile = fixed.profile; resolution = fixed.resolution; evaluationModel = fixed.evaluationModel }
                     bitrateMbps = Double(bitrate) / 1_000_000
                 })
             HStack(spacing: 18) {

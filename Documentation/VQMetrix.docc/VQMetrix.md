@@ -31,3 +31,9 @@ validate packages and queue evaluation into the shared history/report model.
 - <doc:EncodingConfiguration>
 
 - <doc:BitrateSearch>
+
+- <doc:EvaluationModels>
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/)

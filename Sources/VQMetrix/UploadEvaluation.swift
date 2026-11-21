@@ -54,7 +54,7 @@ private final class Y4MInput {
 }
 
 struct UploadEvaluation {
-    static func evaluate(manifest: CaptureManifest, payload: URL, output: URL) async throws {
+    static func evaluate(manifest: CaptureManifest, payload: URL, output: URL, model: VMAFModel = .v1) async throws {
         var segments: [SegmentReport] = []
         var points: [QualityPoint] = []
         let ref = manifest.reference
@@ -80,7 +80,7 @@ struct UploadEvaluation {
                 guard reader.startReading() else { throw QualityError("Cannot start video decoder") }
                 defer { reader.cancelReading() }
                 let raw = try Y4MInput(url: payload.appendingPathComponent(ref.file), reference: ref)
-                let evaluator = try VMAFEvaluator(windowFrames: UInt32(ref.fpsNumerator))
+                let evaluator = try VMAFEvaluator(windowFrames: UInt32(ref.fpsNumerator), model: model, encoding: VMAFEncoding(width: ref.width, height: ref.height, bitDepth: EncodedProfile.read(descriptions[0]) == .main10 ? 10 : 8))
                 for frame in 0..<ref.frameCount {
                     try Task.checkCancellation()
                     try autoreleasepool {
@@ -94,7 +94,7 @@ struct UploadEvaluation {
                 try raw.finish()
                 try evaluator.finish(output: output.appendingPathComponent("variant-\(index)-vmaf.json").path)
                 let actualProfile = EncodedProfile.read(descriptions[0])
-                let settings = BenchmarkSettings(codec: variant.codec == "h264" ? .h264 : .hevc, bitrate: variant.targetBitrate, profile: actualProfile ?? .main)
+                let settings = BenchmarkSettings(codec: variant.codec == "h264" ? .h264 : .hevc, bitrate: variant.targetBitrate, profile: actualProfile ?? .main, evaluationModel: model)
                 for (frame, score) in evaluator.scores.enumerated() {
                     points.append(QualityPoint(segment: index, index: frame, pts: Double(frame)/Double(ref.fpsNumerator), score: score, settings: settings, latencyMilliseconds: 0))
                 }
@@ -105,16 +105,18 @@ struct UploadEvaluation {
                     encodedBytes: bytes, encodedCodec: expectedCodec, firstPTS: 0,
                     lastPTS: Double(ref.frameCount-1)/Double(ref.fpsNumerator), meanVMAF: evaluator.scores.reduce(0,+)/Double(evaluator.scores.count),
                     encodedWidth: Int(dimensions.width), encodedHeight: Int(dimensions.height), encodedProfile: actualProfile?.rawValue,
-                    referenceWidth: ref.width, referenceHeight: ref.height, evaluationScaling: "Native reference dimensions; 8-bit SDR VMAF"))
+                    referenceWidth: ref.width, referenceHeight: ref.height, evaluationScaling: "\(model.bitDepth)-bit SDR VMAF; \(model == .v1 ? "short side 1080" : "source dimensions")",
+                    evaluationWidth: model.dimensions(width: ref.width, height: ref.height).width,
+                    evaluationHeight: model.dimensions(width: ref.width, height: ref.height).height, evaluationBitDepth: model.bitDepth))
             }
         } catch { failure = String(describing: error) }
-        let run = SavedRun(input: payload.path, model: VMAFEvaluator.modelVersion, libvmafVersion: String(cString: vmaf_version()),
+        let run = SavedRun(input: payload.path, model: model.rawValue, libvmafVersion: String(cString: vmaf_version()),
             inputFrames: ref.frameCount * manifest.variants.count, evaluatedFrames: points.count, completeEvaluation: failure == nil,
             stoppedByUser: false, mixerQueueDropped: 0, mixerUndelivered: 0, segments: segments, scores: points,
             sourceKind: "upload", sourceName: "Device · \(ref.source) · \(manifest.runId.prefix(8))", createdAt: Date(),
             format: "\(ref.width)×\(ref.height) · \(ref.fpsNumerator) fps · \(ref.colorRange) \(ref.colorMatrix)", failure: failure, senderPerformance: manifest.variants.compactMap { variant in
                 guard let performance = variant.performance else { return nil }
-                return SenderPerformance(file:variant.file,settings:BenchmarkSettings(codec:variant.codec == "h264" ? .h264 : .hevc,bitrate:variant.targetBitrate),metrics:performance,codecName:variant.codecName,hardwareAccelerated:variant.hardwareAccelerated,actualBitrate:variant.actualBitrate)
+                return SenderPerformance(file:variant.file,settings:BenchmarkSettings(codec:variant.codec == "h264" ? .h264 : .hevc,bitrate:variant.targetBitrate,evaluationModel:model),metrics:performance,codecName:variant.codecName,hardwareAccelerated:variant.hardwareAccelerated,actualBitrate:variant.actualBitrate)
             })
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(run).write(to: output.appendingPathComponent("live-summary.json"), options: .atomic)

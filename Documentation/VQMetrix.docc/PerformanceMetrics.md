@@ -67,3 +67,7 @@ The HTML report exports a per-variant summary and latency graphs alongside VMAF.
 - [Android thermal status](https://developer.android.com/reference/android/os/PowerManager#getCurrentThermalStatus())
 - [Apple VideoToolbox hardware encoder selection](https://developer.apple.com/documentation/videotoolbox/kvtcompressionpropertykey_usinghardwareacceleratedvideoencoder)
 - [Apple thermal state](https://developer.apple.com/documentation/foundation/processinfo/thermalstate-swift.property)
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/performancemetrics/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/performancemetrics/)

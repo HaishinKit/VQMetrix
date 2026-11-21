@@ -23,7 +23,7 @@ struct HistoryView: View {
     @State private var isLoading = false
 
     private var filtered: [HistoryEntry] {
-        entries.filter { search.isEmpty || "\($0.title) \($0.source) \($0.settings) \($0.annotation.notes)".localizedCaseInsensitiveContains(search) }
+        entries.filter { search.isEmpty || "\($0.title) \($0.source) \($0.settings) \($0.model) \($0.annotation.notes)".localizedCaseInsensitiveContains(search) }
     }
     private var draft: RunAnnotation { RunAnnotation(title: title, notes: notes) }
 
@@ -97,6 +97,7 @@ struct HistoryView: View {
                             Text(entry.title).font(.headline).lineLimit(1)
                             Text(entry.date, format: .dateTime.year().month().day().hour().minute()).font(.caption).foregroundStyle(.secondary)
                             Text(entry.settings).font(.caption).lineLimit(2)
+                            Text(entry.model).font(.caption).foregroundStyle(.secondary)
                             HStack {
                                 Text(entry.mean.map { String(format: "VMAF %.2f", $0) } ?? "VMAF —")
                                 Spacer()
@@ -164,7 +165,7 @@ struct HistoryView: View {
                 }.font(.callout)
                 if let width = segment.encodedWidth, let height = segment.encodedHeight,
                    let referenceWidth = segment.referenceWidth, let referenceHeight = segment.referenceHeight {
-                    Text(language.text("Output %@ × %@ · VMAF at %@ × %@", String(width), String(height), String(referenceWidth), String(referenceHeight)))
+                    Text(language.text("Output %@ × %@ · VMAF at %@ × %@", String(width), String(height), String(segment.evaluationWidth ?? referenceWidth), String(segment.evaluationHeight ?? referenceHeight)))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }

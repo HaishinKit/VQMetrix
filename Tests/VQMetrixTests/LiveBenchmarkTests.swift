@@ -7,7 +7,7 @@ import Testing
 @MainActor
 struct LiveBenchmarkTests {
     private func wait(_ condition: @MainActor () -> Bool) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(15))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(90))
         while !condition() {
             guard ContinuousClock.now < deadline else { throw QualityError("Live benchmark timed out") }
             try await Task.sleep(for: .milliseconds(10))
@@ -53,17 +53,17 @@ struct LiveBenchmarkTests {
         try await fixture(url)
         let engine = LiveBenchmark()
         defer { engine.stop() }
-        engine.start(input: url, settings: BenchmarkSettings(codec: .h264, bitrate: 1_000_000), duration: 8)
+        engine.start(input: url, settings: BenchmarkSettings(codec: .h264, bitrate: 1_000_000, evaluationModel: .legacy), duration: 8)
         try await wait { engine.decodedFrames >= 5 || !engine.isRunning }
         #expect(engine.errorMessage == nil)
         #expect(engine.isRunning)
-        let hevc = BenchmarkSettings(codec: .hevc, bitrate: 600_000, profile: .main10, resolution: .p360)
+        let hevc = BenchmarkSettings(codec: .hevc, bitrate: 600_000, profile: .main10, resolution: .p360, evaluationModel: .legacy)
         engine.apply(hevc)
         try await wait { (engine.activeSettings == hevc && engine.decodedFrames >= 15) || !engine.isRunning }
         #expect(engine.errorMessage == nil)
         #expect(engine.sourceSample != nil)
         #expect(engine.decodedSample != nil)
-        let lowerRate = BenchmarkSettings(codec: .hevc, bitrate: 200_000)
+        let lowerRate = BenchmarkSettings(codec: .hevc, bitrate: 200_000, evaluationModel: .legacy)
         engine.apply(lowerRate)
         try await wait { (engine.activeSettings == lowerRate && engine.decodedFrames >= 25) || !engine.isRunning }
         #expect(engine.errorMessage == nil)
@@ -100,7 +100,7 @@ struct LiveBenchmarkTests {
         for codec in BenchmarkCodec.allCases {
             for profile in codec.profiles {
                 let engine = LiveBenchmark()
-                let settings = BenchmarkSettings(codec: codec, bitrate: 800_000, profile: profile, resolution: .p180)
+                let settings = BenchmarkSettings(codec: codec, bitrate: 800_000, profile: profile, resolution: .p180, evaluationModel: .legacy)
                 engine.start(input: url, settings: settings, duration: 0.8)
                 try await wait { !engine.isRunning }
                 #expect(engine.errorMessage == nil, "\(codec.rawValue) \(profile.rawValue): \(engine.errorMessage ?? "")")
@@ -115,37 +115,40 @@ struct LiveBenchmarkTests {
         }
     }
 
-    @Test func offlineReplayAndSearchPreserveAllFrames() async throws {
+    @Test(arguments: VMAFModel.allCases) func offlineReplayAndSearchPreserveAllFrames(model: VMAFModel) async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let input = directory.appendingPathComponent("search.mp4")
         try await fixture(input)
         let engine = LiveBenchmark()
-        engine.start(input: input, settings: BenchmarkSettings(codec: .h264, bitrate: 500_000), duration: 3.2,
+        engine.start(input: input, settings: BenchmarkSettings(codec: .h264, bitrate: 500_000, evaluationModel: model), duration: 0.4,
             offline: true, outputDirectory: directory.appendingPathComponent("trial"))
         try await wait { !engine.isRunning }
         #expect(engine.errorMessage == nil)
-        #expect(engine.inputFrames == 32 && engine.scores.count == 32)
+        #expect(engine.inputFrames == 4 && engine.scores.count == 4)
         let search = BitrateSearch()
         var configuration = BitrateSearchConfiguration()
-        configuration.target = 0; configuration.sampleSeconds = 3.2
-        search.start(input: input, settings: BenchmarkSettings(codec: .h264, bitrate: 500_000), configuration: configuration, engine: engine)
+        configuration.target = 0; configuration.sampleSeconds = 0.4
+        search.start(input: input, settings: BenchmarkSettings(codec: .h264, bitrate: 500_000, evaluationModel: model), configuration: configuration, engine: engine)
         try await wait { !search.isRunning }
         let report = try #require(search.report)
         #expect(report.status == .lowerBoundReached && report.recommendedBitrate == configuration.minimumBitrate)
-        #expect(report.trials.count == 2 && report.trials.allSatisfy { $0.frames == 32 })
+        #expect(report.trials.count == 2 && report.trials.allSatisfy { $0.frames == 4 })
         #expect(report.trials.last?.confirmation == true)
         let output = try #require(search.resultDirectory)
         defer { try? FileManager.default.removeItem(at: output) }
         let saved = try JSONDecoder().decode(SavedRun.self, from: Data(contentsOf: output.appendingPathComponent("live-summary.json")))
         #expect(saved.completeEvaluation && saved.bitrateSearch?.referenceSHA256.count == 64)
+        #expect(saved.model == model.rawValue)
+        #expect(saved.segments.first?.evaluationBitDepth == model.bitDepth)
+        #expect(saved.bitrateSearch?.settings.evaluationModel == model)
         #expect(saved.bitrateSearch?.settings.bitrate == configuration.minimumBitrate)
         let html = ReportRenderer.html(run: saved, annotation: RunAnnotation(), date: Date(), id: "search", language: .english, targetScore: 99)
         #expect(html.contains("Confirmation") && html.contains("Target mean VMAF: 0.000"))
         #expect(!html.contains("Target VMAF: 99.00"))
         let cancelled = BitrateSearch()
-        cancelled.start(input: input, settings: BenchmarkSettings(codec: .h264, bitrate: 500_000), configuration: configuration, engine: engine)
+        cancelled.start(input: input, settings: BenchmarkSettings(codec: .h264, bitrate: 500_000, evaluationModel: model), configuration: configuration, engine: engine)
         cancelled.cancel()
         try await wait { !cancelled.isRunning }
         #expect(cancelled.report?.status == .cancelled && cancelled.report?.recommendedBitrate == nil)

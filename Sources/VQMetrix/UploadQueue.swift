@@ -7,6 +7,7 @@ package struct UploadJob: Codable, Sendable, Identifiable {
     package var status: String
     package var detail: String?
     package var directory: URL
+    package var evaluationModel: VMAFModel? = nil
 }
 
 package actor UploadQueue {
@@ -50,7 +51,7 @@ package actor UploadQueue {
         do {
             try FileManager.default.copyItem(at: file, to: directory.appendingPathComponent("upload.zip"))
             _ = try UploadPackage.extract(directory.appendingPathComponent("upload.zip"), to: directory.appendingPathComponent("payload"), runID: runID)
-            let job = UploadJob(id: runID, digest: digest, date: Date(), status: "Queued", detail: nil, directory: directory)
+            let job = UploadJob(id: runID, digest: digest, date: Date(), status: "Queued", detail: nil, directory: directory, evaluationModel: VMAFModel(rawValue: UserDefaults.standard.string(forKey: "vmafEvaluationModel") ?? "") ?? .v1)
             try save(job)
             jobs.append(job)
             next()
@@ -80,7 +81,7 @@ package actor UploadQueue {
                 let manifest = try JSONDecoder().decode(CaptureManifest.self, from: Data(contentsOf: payload.appendingPathComponent("manifest.json")))
                 let output = results.appendingPathComponent("upload-\(job.id.uuidString.lowercased())")
                 try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-                try await UploadEvaluation.evaluate(manifest: manifest, payload: payload, output: output)
+                try await UploadEvaluation.evaluate(manifest: manifest, payload: payload, output: output, model: job.evaluationModel ?? .legacy)
             } catch { failure = String(describing: error) }
             await self.completed(id: job.id, failure: failure)
         }

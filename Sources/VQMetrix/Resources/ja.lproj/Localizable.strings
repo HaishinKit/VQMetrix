@@ -214,3 +214,9 @@
 "Offline encoder or evaluation timed out." = "オフラインのエンコードまたは評価がタイムアウトしました。";
 "Offline mixer timed out." = "オフラインの映像処理がタイムアウトしました。";
 "Result" = "結果";
+"VMAF model" = "VMAFモデル";
+"Scores and bitrate estimates depend on the model. Uploads keep the model selected when accepted." = "スコアと推定値はモデルによって変わります。アップロードは受け付け時のモデルで評価します。";
+"VMAF v1: short side 1080, 10-bit evaluation." = "VMAF v1：短辺1080・10-bitで評価します。";
+"VMAF v1 supports aspect ratios up to 4:1." = "VMAF v1で扱えるアスペクト比は最大4:1です。";
+"VMAF v1 requires encoded dimensions of at least 180 × 150. Choose a larger output or VMAF v0.6.1." = "VMAF v1の圧縮映像は180 × 150以上が必要です。出力サイズを大きくするかv0.6.1を選んでください。";
+"VMAF evaluation" = "VMAF評価";

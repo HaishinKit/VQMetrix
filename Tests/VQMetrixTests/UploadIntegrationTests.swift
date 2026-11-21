@@ -45,7 +45,7 @@ struct UploadIntegrationTests {
         defer { try? FileManager.default.removeItem(at:root) }
         let mp4 = root.appendingPathComponent("h264-300000.mp4")
         let writer = try AVAssetWriter(outputURL:mp4,fileType:.mp4)
-        let input = AVAssetWriterInput(mediaType:.video,outputSettings:[AVVideoCodecKey:AVVideoCodecType.h264,AVVideoWidthKey:64,AVVideoHeightKey:64])
+        let input = AVAssetWriterInput(mediaType:.video,outputSettings:[AVVideoCodecKey:AVVideoCodecType.h264,AVVideoWidthKey:320,AVVideoHeightKey:180])
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput:input,sourcePixelBufferAttributes:nil)
         writer.add(input)
         #expect(writer.startWriting()); writer.startSession(atSourceTime:.zero)
@@ -56,18 +56,18 @@ struct UploadIntegrationTests {
                 try await Task.sleep(for:.milliseconds(10))
             }
             var pixel:CVPixelBuffer?
-            try check(CVPixelBufferCreate(nil,64,64,kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,[kCVPixelBufferIOSurfacePropertiesKey:[:]] as CFDictionary,&pixel),"Fixture pixels")
+            try check(CVPixelBufferCreate(nil,320,180,kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,[kCVPixelBufferIOSurfacePropertiesKey:[:]] as CFDictionary,&pixel),"Fixture pixels")
             let image = try #require(pixel)
             CVPixelBufferLockBaseAddress(image,[])
-            memset(CVPixelBufferGetBaseAddressOfPlane(image,0),16,CVPixelBufferGetBytesPerRowOfPlane(image,0)*64)
-            memset(CVPixelBufferGetBaseAddressOfPlane(image,1),128,CVPixelBufferGetBytesPerRowOfPlane(image,1)*32)
+            memset(CVPixelBufferGetBaseAddressOfPlane(image,0),16,CVPixelBufferGetBytesPerRowOfPlane(image,0)*180)
+            memset(CVPixelBufferGetBaseAddressOfPlane(image,1),128,CVPixelBufferGetBytesPerRowOfPlane(image,1)*90)
             CVPixelBufferUnlockBaseAddress(image,[])
             #expect(adaptor.append(image,withPresentationTime:CMTime(value:Int64(frame*1_000_000/15),timescale:1_000_000)))
         }
         input.markAsFinished(); await writer.finishWriting()
         #expect(writer.status == .completed)
-        var raw = Data("YUV4MPEG2 W64 H64 F15:1 Ip A1:1 C420jpeg XCOLORRANGE=LIMITED\n".utf8)
-        for _ in 0..<15 { raw.append(Data("FRAME\n".utf8)); raw.append(Data(repeating:16,count:4096)); raw.append(Data(repeating:128,count:2048)) }
+        var raw = Data("YUV4MPEG2 W320 H180 F15:1 Ip A1:1 C420jpeg XCOLORRANGE=LIMITED\n".utf8)
+        for _ in 0..<15 { raw.append(Data("FRAME\n".utf8)); raw.append(Data(repeating:16,count:57600)); raw.append(Data(repeating:128,count:28800)) }
         let reference = root.appendingPathComponent("reference.y4m"); try raw.write(to:reference)
         let pts = (0..<15).map { Int64($0)*1_000_000/15 }
         let map = root.appendingPathComponent("frame-map.json")
@@ -91,8 +91,8 @@ struct UploadIntegrationTests {
             meanLatencyMs:4,p95LatencyMs:4,appCpuTimeMs:20,appCpuCores:0.2,memoryKind:"pss",sampledPeakMemoryBytes:2097152,
             sampleIntervalMs:250,samples:resourceSamples,frameTimings:frameTimes)
         let manifest = CaptureManifest(schema:"vqmetrix.capture.v1",schemaVersion:1,runId:id.uuidString,
-            reference:.init(file:"reference.y4m",source:"test-pattern-v1",width:64,height:64,fpsNumerator:15,fpsDenominator:1,frameCount:15,pixelFormat:"yuv420p",bitDepth:8,colorRange:"limited",colorMatrix:"bt709",frameMap:"frame-map.json"),
-            variants:[.init(file:mp4.lastPathComponent,codec:"h264",targetBitrate:300000,frameCount:15,width:64,height:64,performance:performance)],files:files)
+            reference:.init(file:"reference.y4m",source:"test-pattern-v1",width:320,height:180,fpsNumerator:15,fpsDenominator:1,frameCount:15,pixelFormat:"yuv420p",bitDepth:8,colorRange:"limited",colorMatrix:"bt709",frameMap:"frame-map.json"),
+            variants:[.init(file:mp4.lastPathComponent,codec:"h264",targetBitrate:300000,frameCount:15,width:320,height:180,performance:performance)],files:files)
         let manifestURL = root.appendingPathComponent("manifest.json"); try JSONEncoder().encode(manifest).write(to:manifestURL)
         let zip = root.appendingPathComponent("batch.zip")
         do {
@@ -114,7 +114,7 @@ struct UploadIntegrationTests {
         #expect((response as? HTTPURLResponse)?.statusCode == 202)
         let accepted = try #require(try JSONSerialization.jsonObject(with:body) as? [String:String])
         #expect(accepted["jobId"] == id.uuidString.lowercased())
-        let deadline = ContinuousClock.now.advanced(by:.seconds(30))
+        let deadline = ContinuousClock.now.advanced(by:.seconds(90))
         var job:UploadJob?
         repeat {
             job = await store.list().first
@@ -128,6 +128,8 @@ struct UploadIntegrationTests {
         let detail = try await history.detail(try #require(entries.first).directory)
         #expect(detail.run.evaluatedFrames == 15)
         #expect(detail.run.completeEvaluation)
+        #expect(detail.run.model == job?.evaluationModel?.rawValue)
+        #expect(detail.run.segments.first?.settings.evaluationModel == job?.evaluationModel)
         #expect(detail.run.senderPerformance?.first?.metrics.p95LatencyMs == 4)
         let report = try await history.report(try #require(entries.first).directory,language:.english)
         #expect(report.contains("Sender performance"))
@@ -140,6 +142,7 @@ struct UploadIntegrationTests {
         #expect((conflict as? HTTPURLResponse)?.statusCode == 409)
         let restored = UploadQueue(root:root.appendingPathComponent("Uploads"),results:results)
         #expect(await restored.list().first?.status == "Completed")
+        #expect(await restored.list().first?.evaluationModel == job?.evaluationModel)
         request.setValue("Bearer wrong",forHTTPHeaderField:"Authorization")
         let (_,unauthorized) = try await URLSession.shared.upload(for:request,from:zipData)
         #expect((unauthorized as? HTTPURLResponse)?.statusCode == 401)

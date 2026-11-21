@@ -8,7 +8,7 @@ score generally means the candidate is closer to the reference under the model's
 assumptions. It is not the percentage of pixels preserved or the percentage of viewers
 who will approve the picture.
 
-VQMetrix 1.0 uses **vmaf_v0.6.1**, normally on a **0–100** scale. Other models and options
+VQMetrix 1.3.0 defaults to **vmaf_v1.0.16_3d0h** and also offers **vmaf_v0.6.1**. Both selected models use a **0–100** working range; see <doc:EvaluationModels>. Other models and options
 can have different assumptions or ranges. Record the model and libvmaf version with results.
 Even a video compared with itself need not score exactly 100.
 
@@ -57,7 +57,7 @@ stored reference/candidate pairs. These paths do not measure audio quality, netw
 end-to-end latency, rebuffering, or the complete viewer experience. Missing evaluation frames
 are recorded separately; do not interpret a high VMAF mean as proof that no frames were lost.
 
-The default v0.6.1 model was trained for HDTV/living-room viewing assumptions. Evaluating a
+The legacy v0.6.1 model was trained for HDTV/living-room viewing assumptions. Evaluating a
 mobile-originated clip with it does not automatically select a phone-specific model.
 
 ## Sources
@@ -68,3 +68,7 @@ mobile-originated clip with it does not automatically select a phone-specific mo
 - [Netflix: VMAF, The Journey Continues](https://netflixtechblog.com/vmaf-the-journey-continues-44b51ee9ed12)
 
 [日本語版](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/understandingvmaf/)
+
+## Language / 言語
+
+[English](https://haishinkit.github.io/VQMetrix/swift/documentation/vqmetrix/understandingvmaf/) · [日本語](https://haishinkit.github.io/VQMetrix/ja/swift/documentation/vqmetrix/understandingvmaf/)

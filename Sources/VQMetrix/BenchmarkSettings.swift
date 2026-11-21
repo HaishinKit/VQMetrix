@@ -50,11 +50,12 @@ package struct BenchmarkSettings: Equatable, Codable, Sendable {
     package var bitrate: Int
     package var profile: BenchmarkProfile
     package var resolution: BenchmarkResolution
+    package var evaluationModel: VMAFModel
 
-    package init(codec: BenchmarkCodec, bitrate: Int, profile: BenchmarkProfile = .main, resolution: BenchmarkResolution = .source) {
-        self.codec = codec; self.bitrate = bitrate; self.profile = profile; self.resolution = resolution
+    package init(codec: BenchmarkCodec, bitrate: Int, profile: BenchmarkProfile = .main, resolution: BenchmarkResolution = .source, evaluationModel: VMAFModel = .v1) {
+        self.codec = codec; self.bitrate = bitrate; self.profile = profile; self.resolution = resolution; self.evaluationModel = evaluationModel
     }
-    private enum CodingKeys: String, CodingKey { case codec, bitrate, profile, resolution }
+    private enum CodingKeys: String, CodingKey { case codec, bitrate, profile, resolution, evaluationModel }
     package init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         codec = try values.decode(BenchmarkCodec.self, forKey: .codec)
@@ -62,6 +63,7 @@ package struct BenchmarkSettings: Equatable, Codable, Sendable {
         // Existing histories used Main profile and the source dimensions.
         profile = try values.decodeIfPresent(BenchmarkProfile.self, forKey: .profile) ?? .main
         resolution = try values.decodeIfPresent(BenchmarkResolution.self, forKey: .resolution) ?? .source
+        evaluationModel = try values.decodeIfPresent(VMAFModel.self, forKey: .evaluationModel) ?? .legacy
     }
     package var bitrateLabel: String { String(format: "%@ · %.2f Mbps", codec.rawValue, Double(bitrate) / 1_000_000) }
     package var label: String {

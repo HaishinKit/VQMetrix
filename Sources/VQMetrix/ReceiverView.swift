@@ -79,6 +79,7 @@ struct ReceiverView: View {
                 }
                 GroupBox {
                     VStack(alignment:.leading, spacing:16) {
+                        VMAFModelPicker(language: language)
                         Label(language.text("Local network receiver"), systemImage:"antenna.radiowaves.left.and.right").font(.headline)
                         Text(language.text("Bonjour lets your devices find this Mac on the same network.")).foregroundStyle(.secondary)
                         HStack {
