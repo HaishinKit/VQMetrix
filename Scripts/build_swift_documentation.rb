@@ -2,6 +2,7 @@
 require 'fileutils'
 require 'open3'
 require 'tmpdir'
+require_relative 'localize_documentation_site'
 root = File.expand_path('..', __dir__)
 output = File.expand_path(ARGV.fetch(0))
 source = File.join(root, 'Documentation/VQMetrix.docc')
@@ -31,3 +32,5 @@ source = File.join(root, 'Documentation/VQMetrix.docc')
   end
   puts "Built #{language} DocC guide"
 end
+
+SiteLocalization.install(output)

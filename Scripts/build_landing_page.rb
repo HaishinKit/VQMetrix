@@ -2,6 +2,7 @@
 require 'erb'
 require 'cgi'
 require 'fileutils'
+require_relative 'localize_documentation_site'
 root = File.expand_path('..', __dir__)
 output = File.expand_path(ARGV.fetch(0))
 version = CGI.escapeHTML(ARGV.fetch(1, File.read(File.join(root, 'VERSION')).strip))
@@ -27,5 +28,6 @@ template = ERB.new(File.read(File.join(root, 'docs/site/index.html.erb')))
   FileUtils.mkdir_p(destination)
   File.write(File.join(destination, 'index.html'), template.result(binding))
 end
+SiteLocalization.install(output)
 File.write(File.join(output, '.nojekyll'), '')
 puts "Built English and Japanese landing pages in #{output}"

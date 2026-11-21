@@ -6,6 +6,7 @@ on:
     paths:
       - 'docs/site/**'
       - 'Scripts/build_landing_page.rb'
+      - 'Scripts/localize_documentation_site.rb'
       - 'Scripts/build_documentation_site.rb'
       - '.github/workflows/pages.yml'
 permissions:
