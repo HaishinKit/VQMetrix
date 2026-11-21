@@ -1,7 +1,8 @@
 {
   "swift": {
     "repository": "HaishinKit/HaishinKit.swift",
-    "revision": "75a279dcc48b628609b9cf2acb8e8ab04ecf40be"
+    "revision": "047929455583f65ea5b9ee18b8bb9e39161dd290",
+    "version": "2.3.1"
   },
   "android": {
     "repository": "HaishinKit/HaishinKit.kt",

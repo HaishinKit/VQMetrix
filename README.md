@@ -55,7 +55,7 @@ Capture/encoding UI lives in HaishinKit.kt Example (API 29+).
 ## 🚀 Build
 
 macOS builds use HaishinKit.swift beside this checkout at the revision in
-[Support/dependencies.json](Support/dependencies.json), then prepare their development adapters. The pin references HaishinKit.swift main with VPXHaishinKit and AOMHaishinKit merged; it is a commit reference rather than an SDK release tag:
+[Support/dependencies.json](Support/dependencies.json), then prepare their development adapters. The Swift pin is the commit of HaishinKit.swift 2.3.1, including VPXHaishinKit and AOMHaishinKit. The local adapter adds development-only video quality probes:
 
 ```sh
 ruby Scripts/prepare_dependencies.rb swift
@@ -76,7 +76,7 @@ cd Android
 ./gradlew :transfer:assembleRelease
 ```
 
-These use local development checkouts, not published release tags. The adapters and
+These use local development checkouts; the Swift checkout starts from release 2.3.1 and adds a development adapter. The adapters and
 pinned revisions make CI reproduce the same build. See the [Android guide](Android/README.md)
 for the external artifact and Example integration.
 
