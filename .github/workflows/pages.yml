@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'docs/site/**'
+      - 'Assets/Screenshots/**'
+      - 'Assets/AppIcon.png'
       - 'Scripts/build_landing_page.rb'
       - 'Scripts/localize_documentation_site.rb'
       - 'Scripts/build_documentation_site.rb'
