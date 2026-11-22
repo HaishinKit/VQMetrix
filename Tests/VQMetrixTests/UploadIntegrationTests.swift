@@ -39,6 +39,29 @@ struct UploadIntegrationTests {
         #expect(saved.segments.count == manifest.variants.count)
         #expect(saved.evaluatedFrames == manifest.reference.frameCount * manifest.variants.count)
     }
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["VQMETRIX_MACOS_FIXTURES"] != nil))
+    func actualMacOSProducerArchives() async throws {
+        let fixtures = URL(fileURLWithPath: try #require(ProcessInfo.processInfo.environment["VQMETRIX_MACOS_FIXTURES"]))
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for name in ["h264", "hevc", "av1", "vp8", "vp9"] {
+            let source = fixtures.appendingPathComponent(name).appendingPathComponent("capture.zip")
+            let archive = try Archive(url: source, accessMode: .read)
+            var data = Data()
+            _ = try archive.extract(try #require(archive["manifest.json"])) { data.append($0) }
+            let incoming = try JSONDecoder().decode(CaptureManifest.self, from: data)
+            let payload = root.appendingPathComponent(name)
+            let manifest = try UploadPackage.extract(source, to: payload, runID: try #require(UUID(uuidString: incoming.runId)))
+            let output = root.appendingPathComponent("results-\(name)")
+            try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+            try await UploadEvaluation.evaluate(manifest: manifest, payload: payload, output: output, model: .legacy)
+            let saved = try JSONDecoder().decode(SavedRun.self, from: Data(contentsOf: output.appendingPathComponent("live-summary.json")))
+            #expect(saved.completeEvaluation)
+            #expect(saved.evaluatedFrames == 45)
+            #expect(saved.segments.first?.settings.codec == manifest.variants.first?.benchmarkCodec)
+        }
+    }
     @Test func httpUploadEvaluatesAndSavesHistoryWithIdempotency() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at:root,withIntermediateDirectories:true)
