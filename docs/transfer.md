@@ -42,7 +42,11 @@ h264-1000000.mp4
 h264-2000000.mp4
 ```
 
-HEVC uses `hevc-<bitrate>.mp4`. Each package contains one codec and up to six bitrates.
+HEVC uses `hevc-<bitrate>.mp4`. Software variants use `av1-<bitrate>.ivf`,
+`vp8-<bitrate>.ivf`, or `vp9-<bitrate>.ivf`. Each package contains up to six
+variants. Older receivers accept only the H.264/HEVC MP4 subset; IVF senders need
+an updated receiver. Authentication, the protocol header, and the manifest schema
+remain v1.
 A new capture gets a new UUID; all variants in a package share the exact raw input.
 
 `manifest.json` uses schema `vqmetrix.capture.v1` and `schemaVersion: 1`:
@@ -54,7 +58,7 @@ A new capture gets a new UUID; all variants in a package share the exact raw inp
   hardware-acceleration flag, dimensions, and output frame count
 - `files`: filename (`path`), exact byte size, SHA-256 for every payload except the manifest itself
 
-`frame-map.json` contains `referencePtsUs`, `captureTimestampsNs`, and `variants` (MP4
+`frame-map.json` contains `referencePtsUs`, `captureTimestampsNs`, and `variants` (variant
 filename to presentation-time array). Synthetic inputs have no sensor timestamps.
 Reference and encoded time use `floor(frameIndex * 1_000_000 / fps)` microseconds,
 starting at zero. Camera samples preserve captured bytes while using a common CFR
@@ -71,6 +75,22 @@ Stream uploads to temporary storage with size limits (suggested maximum: 1 GiB c
 and extracted). Authenticate before accepting a body. Reject duplicate ZIP entries,
 absolute/nested/traversal paths, symlinks, and any filename outside the declared layout.
 Validate actual extracted sizes, CRC, and SHA-256; never trust only ZIP metadata.
+
+### Software IVF subset
+
+AV1, VP8 and VP9 variants contain raw libaom/libvpx packets in IVF, not MP4.
+The 32-byte little-endian header is `DKIF`, version 0, header size 32, followed
+by `AV01`, `VP80`, or `VP90`, the manifest dimensions, rate 1,000,000, scale 1,
+the exact frame count, and a zero reserved field. Each packet has a 32-bit byte
+length and 64-bit presentation timestamp in microseconds, followed by its bytes.
+One packet must decode to exactly one displayed frame; hidden/multiple-frame
+packets and frame reordering are outside this subset. Timestamps must equal
+`floor(frameIndex * 1_000_000 / fps)`. The decoder must produce the declared
+dimensions and limited-range, 8-bit 4:2:0 pixels. Header/manifest mismatches,
+zero-length or greater-than-16-MiB packets, truncated input and trailing data
+are rejected. The implementation reads one bounded packet at a time and uses
+libaom/libvpx directly, so system AVFoundation codec/container support is not
+required for these three codecs.
 
 Validate Y4M dimensions, format and frame count, decode every candidate, and verify its
 frame count and timestamp correspondence before evaluating. Preserve the original
@@ -132,3 +152,17 @@ The receiver validates available timing/count data, preserves the original manif
 and stores measurements in history and HTML reports. Missing measurements remain absent.
 Older packages without performance data still work. The transfer AAR only transports
 these packages; it does not collect performance or depend on a particular codec library.
+
+## Verification
+
+`swift test --filter SoftwareUploadTests` builds AV1/VP8/VP9 fixtures, verifies ZIP
+acceptance, decodes/evaluates them, and checks that history preserves each codec.
+It also rejects malformed IVF headers, lengths, timestamps, mislabeled bitstreams,
+truncation and trailing bytes. Existing MP4 HTTP/idempotency tests remain in
+`UploadIntegrationTests`.
+
+For a macOS producer compatibility check, set `VQMETRIX_MACOS_FIXTURES` to a
+folder containing `h264/capture.zip`, `hevc/capture.zip`, `av1/capture.zip`,
+`vp8/capture.zip`, and `vp9/capture.zip`, each with a 45-frame sample, then run
+`swift test --filter actualMacOSProducerArchives`. This runs archive validation,
+decode and VMAF evaluation against the actual producer output.

@@ -12,6 +12,20 @@ struct CaptureManifest: Codable, Sendable {
     struct Variant: Codable, Sendable {
         let file: String; let codec: String; let targetBitrate: Int
         let frameCount: Int; let width: Int; let height: Int
+        var benchmarkCodec: BenchmarkCodec? {
+            switch codec {
+            case "h264": .h264
+            case "hevc": .hevc
+            case "vp8": .vp8
+            case "vp9": .vp9
+            case "av1": .av1
+            default: nil
+            }
+        }
+        var expectedFilename: String? {
+            guard let benchmarkCodec else { return nil }
+            return "\(codec)-\(targetBitrate).\(benchmarkCodec.isSoftware ? "ivf" : "mp4")"
+        }
         var performance: EncodingPerformance? = nil
         var codecName: String? = nil
         var hardwareAccelerated: Bool? = nil
@@ -42,7 +56,7 @@ enum UploadPackage {
 
     static func validName(_ name: String) -> Bool {
         ["manifest.json", "reference.y4m", "frame-map.json"].contains(name) ||
-            name.range(of: #"^(h264|hevc)-[0-9]{1,9}\.mp4$"#, options: .regularExpression) != nil
+            name.range(of: #"^((h264|hevc)-[0-9]{1,9}\.mp4|(av1|vp8|vp9)-[0-9]{1,9}\.ivf)$"#, options: .regularExpression) != nil
     }
 
     static func extract(_ zip: URL, to directory: URL, runID: UUID) throws -> CaptureManifest {
@@ -86,8 +100,8 @@ enum UploadPackage {
         let variantNames = manifest.variants.map(\.file)
         guard Set(variantNames).count == variantNames.count else { throw QualityError("Duplicate variants") }
         for variant in manifest.variants {
-            guard ["h264","hevc"].contains(variant.codec), (50_000...20_000_000).contains(variant.targetBitrate),
-                  variant.file == "\(variant.codec)-\(variant.targetBitrate).mp4",
+            guard variant.benchmarkCodec != nil, (50_000...20_000_000).contains(variant.targetBitrate),
+                  variant.file == variant.expectedFilename,
                   variant.width == ref.width, variant.height == ref.height, variant.frameCount == ref.frameCount else {
                 throw QualityError("Variant settings differ from the reference")
             }
